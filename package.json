@@ -1,0 +1,68 @@
+{
+  "name": "codex-launcher-plugins",
+  "version": "1.0.0",
+  "description": "Codex Launcher \u5b98\u65b9\u72ec\u7acb\u63d2\u4ef6\u6e90\u7801\u4e0e\u53d1\u5e03\u76ee\u5f55",
+  "license": "Apache-2.0",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/loock-ai/codex-launcher-plugins.git"
+  },
+  "homepage": "https://github.com/loock-ai/codex-launcher-plugins",
+  "bugs": {
+    "url": "https://github.com/loock-ai/codex-launcher-plugins/issues"
+  },
+  "keywords": [
+    "codex",
+    "mobile",
+    "app-server",
+    "gateway"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "node scripts/build-plugin.mjs all",
+    "test": "node --test tests/*.test.mjs && npm run test:mobile",
+    "test:mobile": "cd plugins/mobile/source && vitest run",
+    "typecheck": "tsc -p plugins/mobile/source/tsconfig.app.json",
+    "release:plugin": "node scripts/release-plugin.mjs"
+  },
+  "dependencies": {
+    "ws": "^8.18.3",
+    "qrcode": "^1.5.4",
+    "yazl": "^3.3.1",
+    "yauzl": "^3.4.0",
+    "ajv": "^8.17.1"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.56.1",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.0",
+    "@types/jsdom": "^30.0.0",
+    "@types/node": "^24.10.1",
+    "@types/qrcode": "^1.5.6",
+    "@types/react": "^19.2.2",
+    "@types/react-dom": "^19.2.2",
+    "@types/ws": "^8.18.1",
+    "@vitejs/plugin-react": "^5.0.4",
+    "ajv": "^8.17.1",
+    "concurrently": "^10.0.4",
+    "jsdom": "^27.2.0",
+    "qr-scanner": "^1.4.2",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3",
+    "vite": "^7.2.2",
+    "vitest": "^4.0.13",
+    "yaml": "^2.9.0",
+    "esbuild": "^0.28.1"
+  },
+  "private": true
+}

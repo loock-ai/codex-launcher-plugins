@@ -1,0 +1,38 @@
+name: Release independent plugin
+on:
+  workflow_dispatch:
+    inputs:
+      plugin:
+        description: '插件目录 ID（版本取自 manifest）'
+        required: true
+        type: string
+permissions:
+  contents: write
+concurrency:
+  group: plugin-publication
+  cancel-in-progress: false
+jobs:
+  publish:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run typecheck
+      - name: Publish and verify plugin, then update catalog
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PLUGIN_ID: ${{ inputs.plugin }}
+        run: node scripts/release-plugin.mjs "$PLUGIN_ID"
+      - name: Commit published catalog
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add plugins.json
+          git commit -m 'chore(插件目录): 更新已验证发布资产' -m $'新增功能：\n- 无\n\n主要修改：\n- 记录插件发布版本与下载校验值'
+          git push origin HEAD:main

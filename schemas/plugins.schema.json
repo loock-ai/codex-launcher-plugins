@@ -1,0 +1,119 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "repository": {
+      "type": "string",
+      "const": "https://github.com/loock-ai/codex-launcher-plugins"
+    },
+    "plugins": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9_-]{0,79}$"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 1000
+          },
+          "version": {
+            "type": "string",
+            "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)$"
+          },
+          "git": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "url": {
+                "type": "string",
+                "const": "https://github.com/loock-ai/codex-launcher-plugins.git"
+              },
+              "path": {
+                "type": "string",
+                "pattern": "^plugins/[a-z0-9_-]+$"
+              },
+              "ref": {
+                "type": "string",
+                "minLength": 1
+              },
+              "commit": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{40}$"
+              }
+            },
+            "required": [
+              "url",
+              "path",
+              "ref",
+              "commit"
+            ]
+          },
+          "compatibility": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "launcherApiVersion": {
+                "type": "string",
+                "pattern": "^[1-9][0-9]*$"
+              },
+              "node": {
+                "type": "string",
+                "const": ">=20"
+              }
+            },
+            "required": [
+              "launcherApiVersion",
+              "node"
+            ]
+          },
+          "release": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "url": {
+                "type": "string",
+                "pattern": "^https://github\\.com/loock-ai/codex-launcher-plugins/releases/download/[a-zA-Z0-9_.-]+/[a-zA-Z0-9_.-]+\\.zip$"
+              },
+              "sha256": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              }
+            },
+            "required": [
+              "url",
+              "sha256"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "description",
+          "version",
+          "git",
+          "compatibility",
+          "release"
+        ]
+      },
+      "maxItems": 200
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "repository",
+    "plugins"
+  ],
+  "$schema": "http://json-schema.org/draft-07/schema#"
+}

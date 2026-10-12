@@ -1,0 +1,5 @@
+node_modules/
+dist/
+artifacts/
+*.tsbuildinfo
+plugins/mobile/source/dist/
