@@ -15,3 +15,7 @@ test('会话时间包包含注入入口且不需要后台',async()=>{
  assert.equal(JSON.parse(await readFile(join(out,'manifest.json'))).id,'desktop-thread-time');
  assert.match(await readFile(join(out,'inject.js'),'utf8'),/context.onDispose/);
 });
+test('新增第三个插件只需要目录与manifest，不修改Launcher或构建分支',async()=>{
+ const {mkdir,writeFile,rm}=await import('node:fs/promises');const source=await mkdtemp(join(tmpdir(),'third-plugin-'));const out=await mkdtemp(join(tmpdir(),'third-out-'));
+ try{await mkdir(join(source,'demo'));await writeFile(join(source,'demo/manifest.json'),JSON.stringify({id:'demo',version:'1.0.0',entrypoints:{main:'main.cjs'}}));await writeFile(join(source,'demo/main.cjs'),'exports.activate=async()=>({});');await buildPlugin('demo',out,{pluginsDir:source});assert.match(await readFile(join(out,'main.cjs'),'utf8'),/activate/);}finally{await rm(source,{recursive:true,force:true});await rm(out,{recursive:true,force:true});}
+});
