@@ -6,20 +6,20 @@
       "id": "desktop-thread-time",
       "name": "会话时间",
       "description": "在桌面会话列表显示最近活动时间",
-      "version": "1.0.3",
+      "version": "1.0.4",
       "git": {
         "url": "https://github.com/loock-ai/codex-launcher-plugins.git",
         "path": "plugins/desktop-thread-time",
-        "ref": "desktop-thread-time-v1.0.3",
-        "commit": "a7aeb47bef93632e9d4b22f963656172f5f1da2d"
+        "ref": "desktop-thread-time-v1.0.4",
+        "commit": "1778d89620b6edb60349c438bd8ef1cd6d5483bf"
       },
       "compatibility": {
         "launcherApiVersion": "1",
         "node": ">=20"
       },
       "release": {
-        "url": "https://github.com/loock-ai/codex-launcher-plugins/releases/download/desktop-thread-time-v1.0.3/desktop-thread-time-1.0.3.zip",
-        "sha256": "c0c0c1f44fb25e7bc50afd40e642936b519d7713cea43287e0b792bb46c1ddb2"
+        "url": "https://github.com/loock-ai/codex-launcher-plugins/releases/download/desktop-thread-time-v1.0.4/desktop-thread-time-1.0.4.zip",
+        "sha256": "153f936669fe0a8d79a0707fa0d7f41b9073b690a62148694ddb03a7cfd85b04"
       }
     },
     {
