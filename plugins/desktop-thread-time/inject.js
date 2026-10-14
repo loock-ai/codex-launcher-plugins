@@ -35,21 +35,44 @@ function cleanup() {
 context.onDispose(cleanup);
 context.signal.addEventListener('abort', cleanup, { once: true });
 if (context.signal.aborted) { cleanup(); return; }
-const version = window.electronBridge?.getSentryInitOptions?.()?.appVersion;
-const adapters = {
-  '26.1007.30912': ['app-shared-8bd9d0399038.js', 'fN'],
-  '26.1002.52244': ['app-shared-6c00c2afcf84.js', 'aj'],
-};
-const adapter = adapters[version];
-if (!adapter) throw new Error(`会话时间插件未适配桌面版本：${version ?? '未知'}`);
-const moduleUrl = new URL(`./assets/${adapter[0]}`, location.href).href;
-const native = await import(moduleUrl);
-if (stopped) return;
+// 根据已加载模块的接口发现服务，不依赖桌面版本号、文件 hash 或混淆导出名。
+const modules = new Map();
+function moduleCandidates() {
+  const base = new URL(location.href);
+  const resources = performance.getEntriesByType('resource').map(entry => entry.name);
+  const elements = Array.from(document.querySelectorAll('script[type="module"][src], link[rel="modulepreload"][href]'));
+  const urls = new Set();
+  for (const value of [...resources, ...elements.map(element => element.src || element.href)]) {
+    try {
+      const url = new URL(value, base);
+      // 仅加载当前桌面的共享模块，不遍历或执行任意远端代码。
+      if (url.protocol === base.protocol && url.host === base.host &&
+          url.pathname.startsWith(new URL('./assets/', base).pathname) &&
+          /\/app-shared-[^/]+\.js$/.test(url.pathname) && !url.search && !url.hash) urls.add(url.href);
+    } catch { /* 无效资源地址不参与模块检测。 */ }
+  }
+  return [...urls].slice(0, 8);
+}
+function hasCacheService(value) {
+  if (!value || typeof value !== 'object') return false;
+  try {
+    return typeof value.localThreadCatalog?.readEntries === 'function' ||
+      typeof value.appServerManagers?.open === 'function';
+  } catch { return false; }
+}
 let services;
-// appServerManagers 受桌面功能开关控制；目录服务独立存在。
 for (let attempt = 0; attempt < 40 && !stopped; attempt++) {
-  services = native[adapter[1]];
-  if (typeof services?.localThreadCatalog?.readEntries === 'function' || typeof services?.appServerManagers?.open === 'function') break;
+  for (const moduleUrl of moduleCandidates()) {
+    if (!modules.has(moduleUrl)) {
+      try { modules.set(moduleUrl, await import(moduleUrl)); }
+      catch { modules.set(moduleUrl, null); }
+    }
+    if (stopped) return;
+    const native = modules.get(moduleUrl);
+    if (native) services = Object.values(native).find(hasCacheService);
+    if (services) break;
+  }
+  if (services) break;
   await new Promise(resolve => {
     const done = () => { clearTimeout(timer); context.signal.removeEventListener('abort', done); resolve(); };
     const timer = setTimeout(done, 100);
@@ -58,7 +81,7 @@ for (let attempt = 0; attempt < 40 && !stopped; attempt++) {
   });
 }
 if (stopped) return;
-if (typeof services?.localThreadCatalog?.readEntries !== 'function' && typeof services?.appServerManagers?.open !== 'function') throw new Error('会话时间插件：桌面未提供会话目录或缓存管理器，请待桌面加载完成后重新加载插件');
+if (!services) throw new Error('会话时间插件：未发现可用的桌面会话目录或缓存接口，请待桌面加载完成后重新加载插件');
 style = document.createElement('style');
 style.setAttribute('data-codex-mobile-time-style', '');
 style.textContent = `[${marker}] { display: inline-block; flex: 0 0 auto; align-self: center; margin-inline: 4px; font-size: 10px; font-weight: 400; font-variant-numeric: tabular-nums; line-height: 14px; opacity: .55; white-space: nowrap; user-select: none; }`;
