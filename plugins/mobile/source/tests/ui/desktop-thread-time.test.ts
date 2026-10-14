@@ -19,6 +19,11 @@ async function start(manager: any, version = '26.1007.30912', openFactory?: (man
   const opened: string[] = [];
   (globalThis as any).__timeServices = { appServerManagers: { open: (host: string) => { opened.push(host); return openFactory ? openFactory(manager) : Promise.resolve({ status: 'ready', manager }); } } };
   (window as any).electronBridge = { getSentryInitOptions: () => ({ appVersion: version }) };
+  const preload = document.createElement('link');
+  preload.rel = 'modulepreload';
+  preload.href = new URL('./assets/app-shared-current.js', location.href).href;
+  document.head.append(preload);
+  disposers.push(() => preload.remove());
   const source = readFileSync(path, 'utf8').replace('await import(moduleUrl)', 'await loadNative(moduleUrl)');
   const run = new Function('context', 'loadNative', `return (async () => {${source}\n})()`);
   await run({ signal: controller.signal, onDispose: (fn: () => void) => disposers.push(fn) }, async () => ({ get fN(){return servicesFactory?servicesFactory():(globalThis as any).__timeServices}, get aj(){return servicesFactory?servicesFactory():(globalThis as any).__timeServices} }));
@@ -61,8 +66,11 @@ test('虚拟列表复用行时替换时间，关闭后清除标签样式并释�
   expect(document.querySelector('[data-codex-mobile-time-style]')).toBeNull();
   expect(disposed).toBe(true);
 });
-test('未知版本清晰失败且不访问管理器', async () => {
-  await expect(start({}, '99.0')).rejects.toThrow('未适配');
+test('未知版本按接口能力读取缓存，不依赖版本白名单', async () => {
+  vi.spyOn(Date, 'now').mockReturnValue(now * 1000);
+  const a = row('local:a');
+  await start({ getCachedThreadMetadata: async () => [{ id: 'a', updatedAt: now - 120 }] }, '99.0');
+  expect(a.querySelector('[data-codex-mobile-time]')?.textContent).toBe('2m');
 });
 test('取消后晚到的缓存结果不得添加标签', async () => {
   row('local:a'); let finish!: (v: any) => void;
