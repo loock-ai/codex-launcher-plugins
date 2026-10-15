@@ -8,6 +8,7 @@ test('Mobile包在没有宿主依赖的临时目录加载，包含Web及配置�
  await buildPlugin('mobile',out);
  for(const p of ['manifest.json','main.cjs','web/index.html','ui/index.html'])await access(join(out,p));
  const run=execFileSync(process.execPath,['-e',`const p=require(${JSON.stringify(join(out,'main.cjs'))});if(typeof p.activate!=='function')throw Error('missing activate')`],{cwd:tmpdir(),env:{PATH:process.env.PATH},encoding:'utf8'});
+ await assert.rejects(access(join(out,'app')));
  assert.equal(run,'');assert.equal(JSON.parse(await readFile(join(out,'manifest.json'))).id,'mobile');
 });
 test('会话时间包包含注入入口且不需要后台',async()=>{

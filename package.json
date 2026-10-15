@@ -1,7 +1,7 @@
 {
   "name": "codex-launcher-plugins",
   "version": "1.0.0",
-  "description": "Codex Launcher \u5b98\u65b9\u72ec\u7acb\u63d2\u4ef6\u6e90\u7801\u4e0e\u53d1\u5e03\u76ee\u5f55",
+  "description": "Codex Launcher 官方独立插件源码与发布目录",
   "license": "Apache-2.0",
   "type": "module",
   "engines": {
@@ -26,10 +26,12 @@
   },
   "scripts": {
     "build": "node scripts/build-plugin.mjs all",
-    "test": "node --test tests/*.test.mjs && npm run test:mobile",
+    "test": "node --test tests/*.test.mjs && npm run test:mobile-ci && npm run test:mobile",
     "test:mobile": "cd plugins/mobile/source && vitest run",
     "typecheck": "tsc -p plugins/mobile/source/tsconfig.app.json",
-    "release:plugin": "node scripts/release-plugin.mjs"
+    "release:plugin": "node scripts/release-plugin.mjs",
+    "build:mobile:web": "node scripts/build-mobile-web.mjs",
+    "test:mobile-ci": "vitest run --config vitest.mobile-ci.config.ts"
   },
   "dependencies": {
     "ws": "^8.18.3",
