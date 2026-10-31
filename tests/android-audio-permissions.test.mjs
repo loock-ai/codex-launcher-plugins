@@ -12,10 +12,10 @@ function python(stepName){
  const match=run?.match(/python3[^\n]*<<'PY'\n([\s\S]*?)^PY$/m);
  assert.ok(match,`Missing production Python in ${stepName}`);return match[1];
 }
-const permissions=['INTERNET','ACCESS_NETWORK_STATE','CAMERA','RECORD_AUDIO','MODIFY_AUDIO_SETTINGS','REQUEST_INSTALL_PACKAGES'];
+const permissions=['INTERNET','ACCESS_NETWORK_STATE','CAMERA','RECORD_AUDIO','MODIFY_AUDIO_SETTINGS','REQUEST_INSTALL_PACKAGES','FOREGROUND_SERVICE','FOREGROUND_SERVICE_MICROPHONE','WAKE_LOCK','POST_NOTIFICATIONS'];
 const appId='vip.loock.codexmobile';
 function manifest(list,{final=false}={}){
- return `<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="${appId}">${list.map(name=>`<uses-permission android:name="android.permission.${name}"/>`).join('')}${final?`<uses-permission android:name="${appId}.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"/><permission android:name="${appId}.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION" android:protectionLevel="signature"/>`:''}<application android:allowBackup="false"><provider android:name="androidx.core.content.FileProvider" android:authorities="${appId}.fileprovider" android:exported="false"/></application></manifest>`;
+ return `<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="${appId}">${list.map(name=>`<uses-permission android:name="android.permission.${name}"/>`).join('')}${final?`<uses-permission android:name="${appId}.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"/><permission android:name="${appId}.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION" android:protectionLevel="signature"/>`:''}<application android:allowBackup="false"><service android:name="com.app.pakeplus.VoiceBackgroundService" android:exported="false" android:foregroundServiceType="microphone"/><provider android:name="androidx.core.content.FileProvider" android:authorities="${appId}.fileprovider" android:exported="false"/></application></manifest>`;
 }
 test('Android 清理权限时保留并补齐 WebRTC 音频设置权限，仍移除无关权限',()=>{
  const full=python('Harden and test embedded Android project');const end=full.indexOf('activity_path =');assert.ok(end>0);
@@ -40,6 +40,30 @@ test('APK 成品校验要求音频设置权限，缺失时拒绝发布',()=>{
    writeFileSync(file,manifest(complete?permissions:permissions.filter(p=>p!=='MODIFY_AUDIO_SETTINGS'),{final:true}));
    const run=spawnSync('python3',['-c',script,file],{encoding:'utf8',env:{...process.env,APP_ID:appId}});
    assert.equal(run.status===0,complete,run.stderr);
+  }
+ }finally{rmSync(root,{recursive:true,force:true});}
+});
+
+test('APK 成品缺失服务或错误 exported/type 时拒绝',()=>{
+ const script=python('Prepare and verify APK'),root=mkdtempSync(join(tmpdir(),'android-final-voice-'));
+ try {
+  const file=join(root,'manifest.xml');
+  for(const content of [manifest(permissions,{final:true}).replace(/<service[^>]+\/>/,''),manifest(permissions,{final:true}).replace('android:foregroundServiceType="microphone"','android:foregroundServiceType="camera"'),manifest(permissions,{final:true}).replace('android:exported="false" android:foregroundServiceType','android:exported="true" android:foregroundServiceType')]) {
+   writeFileSync(file,content);
+   const run=spawnSync('python3',['-c',script,file],{encoding:'utf8',env:{...process.env,APP_ID:appId}});
+   assert.notEqual(run.status,0,run.stderr);
+  }
+ }finally{rmSync(root,{recursive:true,force:true});}
+});
+
+test('APK microphone 类型兼容 apkanalyzer 数值输出，拒绝组合类型',()=>{
+ const script=python('Prepare and verify APK'),root=mkdtempSync(join(tmpdir(),'android-final-voice-flags-'));
+ try {
+  const file=join(root,'manifest.xml');
+  for(const [value,valid] of [['0x80',true],['128',true],['0x81',false],['microphone|camera',false]]) {
+   writeFileSync(file,manifest(permissions,{final:true}).replace('foregroundServiceType="microphone"',`foregroundServiceType="${value}"`));
+   const run=spawnSync('python3',['-c',script,file],{encoding:'utf8',env:{...process.env,APP_ID:appId}});
+   assert.equal(run.status===0,valid,run.stderr);
   }
  }finally{rmSync(root,{recursive:true,force:true});}
 });

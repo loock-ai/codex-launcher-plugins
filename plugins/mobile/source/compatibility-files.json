@@ -53,6 +53,7 @@
   "src/app-server/thread-list-loader.ts",
   "src/app-server/turn-steering.ts",
   "src/audio/native-realtime-audio.ts",
+  "src/audio/native-voice-background.ts",
   "src/audio/realtime-audio.ts",
   "src/app-update/native-bridge.ts",
   "src/app-update/release.ts",

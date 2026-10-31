@@ -884,13 +884,20 @@ jobs:
           node "$RUNNER_TEMP/scan-mobile-assets.cjs" app/src/main/assets
           test -s pakeplus.keystore
 
+      - name: Configure Android background voice
+        working-directory: pakeplus
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 ../scripts/configure-android-voice-background.py --project . --templates ../plugins/mobile/app/android
+
       - name: Build debug APK
         working-directory: pakeplus
         shell: bash
         run: |
           set -euo pipefail
           chmod +x ./gradlew
-          ./gradlew assembleDebug --no-daemon
+          ./gradlew testDebugUnitTest assembleDebug --no-daemon
 
       - name: Prepare and verify APK
         working-directory: pakeplus
@@ -929,6 +936,10 @@ jobs:
               "android.permission.RECORD_AUDIO",
               "android.permission.MODIFY_AUDIO_SETTINGS",
               "android.permission.REQUEST_INSTALL_PACKAGES",
+              "android.permission.FOREGROUND_SERVICE",
+              "android.permission.FOREGROUND_SERVICE_MICROPHONE",
+              "android.permission.WAKE_LOCK",
+              "android.permission.POST_NOTIFICATIONS",
               dynamic_receiver_permission,
           }
           if permissions != allowed_permissions:
@@ -950,6 +961,23 @@ jobs:
           application = root.find("application")
           if application is None or application.get(f"{{{android}}}allowBackup") != "false":
               raise SystemExit("Final APK must disable application backup")
+          voice_services = [
+              element for element in application.findall("service")
+              if element.get(f"{{{android}}}name") == "com.app.pakeplus.VoiceBackgroundService"
+          ]
+          def microphone_only(value):
+              if value == "microphone":
+                  return True
+              try:
+                  return int(value, 0) == 128
+              except (TypeError, ValueError):
+                  return False
+          if (
+              len(voice_services) != 1
+              or voice_services[0].get(f"{{{android}}}exported") != "false"
+              or not microphone_only(voice_services[0].get(f"{{{android}}}foregroundServiceType"))
+          ):
+              raise SystemExit("Final APK must include a private microphone voice service")
           providers = {
               element.get(f"{{{android}}}authorities", ""):
                   element.get(f"{{{android}}}exported", "")
@@ -961,6 +989,9 @@ jobs:
                   f"Final APK is missing the private update provider: {providers}"
               )
           PY
+          apkanalyzer dex packages --defined-only "$artifact" > "$RUNNER_TEMP/apk/CodexMobile-dex.txt"
+          grep -Fq 'com.app.pakeplus.VoiceBackgroundService' "$RUNNER_TEMP/apk/CodexMobile-dex.txt"
+          grep -Fq 'com.app.pakeplus.VoiceSessionLease' "$RUNNER_TEMP/apk/CodexMobile-dex.txt"
           mkdir -p "$unpacked_assets"
           unzip -q "$artifact" 'assets/*' -d "$unpacked_assets"
           node "$RUNNER_TEMP/scan-mobile-assets.cjs" "$unpacked_assets/assets"

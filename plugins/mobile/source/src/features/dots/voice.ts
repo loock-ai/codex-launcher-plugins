@@ -1,3 +1,4 @@
+import type {VoiceBackgroundLease} from '../../audio/native-voice-background';
 export type VoicePhase='idle'|'preparing'|'connecting'|'active'|'ended'|'error';
 export interface VoiceState {phase:VoicePhase;muted:boolean;startedAt?:number;error?:string}
 type Action='start'|'attach'|'heartbeat'|'stop';
@@ -7,6 +8,7 @@ export interface VoiceEnvironment {
  createPeer():RTCPeerConnection;
  createAudio():HTMLAudioElement;
  request(action:Action,body:Record<string,string>):Promise<{answerSdp?:string}>;
+ background?:VoiceBackgroundLease;
 }
 /** 每个实例只负责一次通话；取消不丢弃晚到的创建回执。 */
 export class DotVoiceCall {
@@ -23,6 +25,7 @@ export class DotVoiceCall {
  private deadline?:ReturnType<typeof setTimeout>;
  private rejectReady?:(error:Error)=>void;
  private stopping?:Promise<void>;
+ private backgroundRequested=false;
  constructor(private env:VoiceEnvironment,private onChange:(state:VoiceState)=>void){}
  private publish(update:Partial<VoiceState>){this.state={...this.state,...update};this.onChange(this.state);}
  async start(dotId:string,requestId:string){
@@ -34,6 +37,11 @@ export class DotVoiceCall {
    const stream=await this.env.getUserMedia();
    if(this.finished){stream.getTracks().forEach(track=>track.stop());return;}
    this.stream=stream;stream.getAudioTracks().forEach(track=>{track.enabled=false;});
+   if(this.env.background){
+    this.backgroundRequested=true;
+    await this.env.background.start(requestId,message=>{void this.finish(message);});
+    if(this.finished)return;
+   }
    const peer=this.peer=this.env.createPeer(),audio=this.audio=this.env.createAudio();audio.autoplay=true;
    for(const track of stream.getTracks())peer.addTrack(track,stream);
    const channel=this.channel=peer.createDataChannel('oai-events');
@@ -83,6 +91,7 @@ export class DotVoiceCall {
   let pending=false;
   this.heartbeat=setInterval(()=>{
    if(pending||this.finished)return;pending=true;
+   try{this.env.background?.pulse(this.requestId);}catch{pending=false;void this.finish('后台通话服务已失效，请重新拨号。');return;}
    void this.env.request('heartbeat',{requestId:this.requestId}).catch(()=>this.finish('通话服务连接中断，麦克风已关闭。')).finally(()=>{pending=false;});
   },15000);
  }
@@ -107,6 +116,10 @@ export class DotVoiceCall {
   this.stream?.getTracks().forEach(track=>track.stop());this.stream=undefined;
   this.channel?.close();this.peer?.close();
   if(this.audio){this.audio.pause();this.audio.srcObject=null;}
+  if(this.backgroundRequested){
+   this.backgroundRequested=false;
+   try{this.env.background?.stop(this.requestId);}catch{error??='麦克风已关闭，但后台通话服务停止未确认。';}
+  }
   this.publish({phase:error?'error':'ended',error});
   await this.cleanupRemote();
  }

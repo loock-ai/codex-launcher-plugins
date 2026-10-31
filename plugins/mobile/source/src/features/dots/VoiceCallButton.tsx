@@ -3,6 +3,7 @@ import type {BackendConfig} from '../../backends/types';
 import {t} from '../../i18n';
 import {createRequestId,dotsRequest} from './api';
 import {DotVoiceCall,type VoiceState} from './voice';
+import {readNativeVoiceBackground} from '../../audio/native-voice-background';
 
 export function VoiceCallButton({backend,dotId}:{backend:BackendConfig;dotId:string}){
  const [state,setState]=useState<VoiceState>({phase:'idle',muted:false});
@@ -16,7 +17,7 @@ export function VoiceCallButton({backend,dotId}:{backend:BackendConfig;dotId:str
  },[]);
  useEffect(()=>{if(state.phase!=='active')return;const timer=setInterval(()=>setNow(Date.now()),1000);return()=>clearInterval(timer);},[state.phase]);
  const start=()=>{
-  const call=new DotVoiceCall({secure:globalThis.isSecureContext===true,getUserMedia:()=>navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true},video:false}),createPeer:()=>new RTCPeerConnection(),createAudio:()=>new Audio(),request:(action,body)=>dotsRequest(backend,`voice/${action}`,new AbortController().signal,body,undefined,{keepalive:action==='stop'})},value=>{if(mounted.current&&current.current===call){setState(value);setNow(Date.now());}});
+  const call=new DotVoiceCall({secure:globalThis.isSecureContext===true,getUserMedia:()=>navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true},video:false}),createPeer:()=>new RTCPeerConnection(),createAudio:()=>new Audio(),background:readNativeVoiceBackground(),request:(action,body)=>dotsRequest(backend,`voice/${action}`,new AbortController().signal,body,undefined,{keepalive:action==='stop'})},value=>{if(mounted.current&&current.current===call){setState(value);setNow(Date.now());}});
   current.current=call;void call.start(dotId,createRequestId());
  };
  const busy=['preparing','connecting','active'].includes(state.phase);

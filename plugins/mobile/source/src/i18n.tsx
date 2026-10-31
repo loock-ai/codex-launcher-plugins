@@ -13,6 +13,17 @@ export type LanguagePreference = "system" | Locale;
 const LANGUAGE_STORAGE_KEY = "codex-mobile:language";
 
 const english: Record<string, string> = {
+  "请先允许麦克风权限，再发起通话。": "Allow microphone access before starting a call.",
+  "请回到 App 发起语音通话，再切到后台。": "Return to the app to start a voice call, then switch to the background.",
+  "请从 App 内的对话页发起语音通话。": "Start the voice call from a conversation inside the app.",
+  "已有后台通话，请先挂断。": "A background call is already running. Hang up first.",
+  "后台通话保活已中断，请回到 App 重新拨号。": "Background call activity stopped. Return to the app to call again.",
+  "后台通话服务已结束，请重新拨号。": "The background call service ended. Call again.",
+  "无法启动后台通话服务，请返回 App 后重试。": "Could not start the background call service. Return to the app and try again.",
+  "后台通话已取消": "Background call cancelled",
+  "后台通话服务启动超时，请重试。": "Background call service startup timed out. Try again.",
+  "后台通话服务已失效，请重新拨号。": "The background call service is no longer active. Call again.",
+  "麦克风已关闭，但后台通话服务停止未确认。": "Your microphone is off, but background service shutdown is unconfirmed.",
   "语音通话": "Voice call",
   "请使用支持麦克风的浏览器，并通过 HTTPS 或本机安全地址打开页面": "Use a microphone-capable browser over HTTPS or a secure local address",
   "等待麦克风…": "Waiting for microphone…",

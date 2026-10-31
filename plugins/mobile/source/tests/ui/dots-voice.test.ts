@@ -3,10 +3,11 @@ import {DotVoiceCall,type VoiceState} from '../../src/features/dots/voice';
 import {createElement} from 'react';
 import {act,cleanup,fireEvent,render,screen,waitFor} from '@testing-library/react';
 import {VoiceCallButton} from '../../src/features/dots/VoiceCallButton';
+import type {VoiceBackgroundLease} from '../../src/audio/native-voice-background';
 
 const calls:DotVoiceCall[]=[];
 afterEach(async()=>{cleanup();await Promise.allSettled(calls.splice(0).map(call=>call.stop()));vi.unstubAllGlobals();vi.useRealTimers();});
-function fixture(options:{secure?:boolean;media?:Promise<MediaStream>;connect?:boolean;rejectPlay?:boolean}={}){
+function fixture(options:{secure?:boolean;media?:Promise<MediaStream>;connect?:boolean;rejectPlay?:boolean;background?:VoiceBackgroundLease}={}){
  const track={enabled:true,stop:vi.fn()},stream={getTracks:()=>[track],getAudioTracks:()=>[track]} as unknown as MediaStream;
  class Peer extends EventTarget {
   connectionState='new';localDescription:RTCSessionDescriptionInit|null=null;
@@ -20,7 +21,7 @@ function fixture(options:{secure?:boolean;media?:Promise<MediaStream>;connect?:b
  const peer=new Peer(),requests:{action:string;body:unknown}[]=[],states:VoiceState[]=[];
  const audio={srcObject:null,autoplay:false,play:async()=>{if(options.rejectPlay)throw Error('play denied');},pause:vi.fn()} as unknown as HTMLAudioElement;
  const getUserMedia=vi.fn(async()=>options.media??stream);
- const call=new DotVoiceCall({secure:options.secure!==false,getUserMedia,createPeer:()=>peer as unknown as RTCPeerConnection,createAudio:()=>audio,request:async(action,body)=>{requests.push({action,body});return action==='start'?{answerSdp:'v=0\r\nanswer'}:{};}},state=>states.push(state));calls.push(call);
+ const call=new DotVoiceCall({secure:options.secure!==false,getUserMedia,createPeer:()=>peer as unknown as RTCPeerConnection,createAudio:()=>audio,background:options.background,request:async(action,body)=>{requests.push({action,body});return action==='start'?{answerSdp:'v=0\r\nanswer'}:{};}},state=>states.push(state));calls.push(call);
  return {call,track,peer,stream,audio,requests,states,getUserMedia};
 }
 it('WebRTC、数据通道和关联就绪后才接通，挂断关闭麦克风并请求服务端清理',async()=>{
@@ -72,4 +73,26 @@ it('上一通话晚到的挂断错误不能覆盖新通话，也不能丢失卸�
  await act(async()=>{release(new Response(JSON.stringify({error:'late stop failure'}),{status:502}));});
  await waitFor(()=>expect(screen.getByRole('button',{name:'挂断'})).toBeVisible());
  ui.unmount();expect(b.track.stop).toHaveBeenCalledOnce();expect(b.peer.connectionState).toBe('closed');
+});
+it('原生后台服务就绪后才拨号，通知挂断会清理音轨和网关通话',async()=>{
+ let ready!:()=>void,ended!:(message?:string)=>void;
+ const background={start:vi.fn((_id:string,callback:(message?:string)=>void)=>{ended=callback;return new Promise<void>(resolve=>{ready=resolve;});}),stop:vi.fn(),pulse:vi.fn()};
+ const f=fixture({background});const start=f.call.start('dot','request-1');
+ await vi.waitFor(()=>expect(background.start).toHaveBeenCalled());expect(f.requests).toHaveLength(0);expect(f.track.enabled).toBe(false);
+ ready();await start;expect(f.states.at(-1)?.phase).toBe('active');
+ ended();await vi.waitFor(()=>expect(f.requests.at(-1)?.action).toBe('stop'));expect(f.track.stop).toHaveBeenCalledOnce();expect(background.stop).toHaveBeenCalledWith('request-1');
+});
+it('等待原生后台服务时取消，会关闭麦克风并取消该服务，不发出拨号',async()=>{
+ let ready!:()=>void;
+ const background={start:vi.fn(()=>new Promise<void>(resolve=>{ready=resolve;})),stop:vi.fn(),pulse:vi.fn()};
+ const f=fixture({background});const start=f.call.start('dot','request-1');
+ await vi.waitFor(()=>expect(background.start).toHaveBeenCalled());await f.call.stop();ready();await start;
+ expect(f.track.stop).toHaveBeenCalledOnce();expect(background.stop).toHaveBeenCalledWith('request-1');expect(f.requests).toHaveLength(0);
+});
+it('原生服务启动拒绝或保活失败时不能留下录音或网关通话',async()=>{
+ const a=fixture({background:{start:async()=>{throw Error('permission denied');},stop:vi.fn(),pulse:vi.fn()}});await a.call.start('dot','request-a');
+ expect(a.states.at(-1)?.phase).toBe('error');expect(a.requests).toHaveLength(0);expect(a.track.stop).toHaveBeenCalledOnce();
+ vi.useFakeTimers();const background={start:async()=>{},stop:vi.fn(),pulse:vi.fn(()=>{throw Error('service lost');})};
+ const b=fixture({background});await b.call.start('dot','request-b');await vi.advanceTimersByTimeAsync(15001);
+ expect(b.states.at(-1)?.phase).toBe('error');expect(b.track.stop).toHaveBeenCalledOnce();expect(b.requests.at(-1)?.action).toBe('stop');expect(background.stop).toHaveBeenCalledWith('request-b');
 });
