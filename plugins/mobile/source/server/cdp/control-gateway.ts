@@ -71,5 +71,5 @@ export async function createControlGateway(options:{channel:DesktopControlChanne
  try{await new Promise<void>((resolve,reject)=>{server.once('error',reject);server.listen(options.port,options.host,()=>{server.off('error',reject);resolve();});});}catch(e){unsubscribe();await options.channel.close();throw e;}
  questionTimer=setInterval(()=>{void refreshQuestions();},1500);questionTimer.unref();
  statusChanged();
- return {port:(server.address() as {port:number}).port,channel:options.channel,async close(){if(closed)return;closed=true;clearInterval(questionTimer);options.channel.setUserQuestionTargets([]);unsubscribe();for(const socket of clients.keys())socket.terminate();await new Promise<void>(resolve=>wss.close(()=>resolve()));await new Promise<void>(resolve=>server.close(()=>resolve()));await options.channel.close();await options.dots?.close();statusChanged();}};
+ return {port:(server.address() as {port:number}).port,channel:options.channel,async close(){if(closed)return;closed=true;clearInterval(questionTimer);options.channel.setUserQuestionTargets([]);unsubscribe();for(const socket of clients.keys())socket.terminate();await new Promise<void>(resolve=>wss.close(()=>resolve()));await new Promise<void>(resolve=>server.close(()=>resolve()));try{await options.dots?.close();}finally{await options.channel.close();statusChanged();}}};
 }

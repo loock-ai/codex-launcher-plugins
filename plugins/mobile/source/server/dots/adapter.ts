@@ -2,6 +2,7 @@ import {randomUUID} from 'node:crypto';
 import {DOTS_MAX_FILE_BYTES,DOTS_MAX_ATTACHMENTS,type DotAttachment} from './types.js';
 import {isOpaqueId,upstreamId} from './identifiers.js';
 import { DotsError, type DesktopHttpTransport, type DotMessage, type DotProfile } from './types.js';
+import {DotsVoice} from './voice.js';
 
 type RecordValue = Record<string, unknown>;
 function record(value: unknown): RecordValue { return value !== null && typeof value === 'object' && !Array.isArray(value) ? value as RecordValue : {}; }
@@ -85,6 +86,7 @@ function message(value: unknown, members: ReadonlyMap<string, RecordValue> = new
 }
 
 export class DotsAdapter {
+  readonly voice:DotsVoice;
   private readonly ledger = new Map<string, {dotId:string;text:string;attachmentIds:string[];result:Promise<{message:DotMessage}>}>();
   private readonly uploads=new Map<string,{dotId:string;roomId:string;fileId:string;attachment:DotAttachment}>();
   private pendingUploads=0;
@@ -93,12 +95,13 @@ export class DotsAdapter {
   private lastMessageMapping:RecordValue|null=null;
   diagnostics(){return {lastDiscovery:this.lastDiscovery,lastMessageMapping:this.lastMessageMapping};}
   constructor(private readonly transport: DesktopHttpTransport, options: {maxRequests?:number} = {}) {
+    this.voice=new DotsVoice(transport,id=>this.findDot(id));
     this.maxRequests = options.maxRequests ?? 1000;
     if (!Number.isInteger(this.maxRequests) || this.maxRequests < 1) throw new Error('maxRequests 必须为正整数');
   }
   async status() {
     const status = await this.transport.status();
-    return {...status,mode:'polling' as const,capabilities:{messages:status.available,history:status.available,attachments:status.available,approvals:false as const}};
+    return {...status,mode:'polling' as const,capabilities:{messages:status.available,history:status.available,attachments:status.available,voice:status.available&&status.voiceSignaling===true,approvals:false as const}};
   }
   private async read(path: string, requireItems=true): Promise<RecordValue> {
     let response;
@@ -140,7 +143,7 @@ export class DotsAdapter {
     diagnostic.returned=dots.length;diagnostic.withRoom=dots.filter(dot=>dot.roomId!==null).length;
     return {dots,nextCursor:cursor(data.cursor) ?? null};
   }
-  private async room(dotId: string): Promise<string> {
+  private async findDot(dotId: string): Promise<DotProfile> {
     identifier(dotId,'Dot ID');
     let next: string | undefined;
     const visited = new Set<string>();
@@ -149,7 +152,8 @@ export class DotsAdapter {
       const dot = data.dots.find(p=>p.id===dotId);
       if (dot) {
         if (!dot.roomId) throw new DotsError('DOTS_ROOM_UNINITIALIZED', '此 Dot 的消息房间尚未初始化，请先在桌面打开对话', 409);
-        return identifier(dot.roomId,'消息房间 ID');
+        identifier(dot.roomId,'消息房间 ID');
+        return dot;
       }
       if (!data.nextCursor) throw new DotsError('DOTS_NOT_FOUND', '未找到此 Dot',404);
       if (visited.has(data.nextCursor)) break;
@@ -157,6 +161,7 @@ export class DotsAdapter {
     }
     throw new DotsError('DOTS_PAGINATION_FAILED', 'Dot 列表分页异常，无法确认消息房间');
   }
+  private async room(dotId:string):Promise<string>{return (await this.findDot(dotId)).roomId!;}
   async messages(dotId: string, before?: string) {
     const page = cursor(before), roomId = await this.room(dotId);
     const params = new URLSearchParams({limit:'20'}); if (page) params.set('before',page);
@@ -226,5 +231,5 @@ export class DotsAdapter {
       const byId=new Map(attachmentIds.map(id=>{const upload=this.uploads.get(id)!;return [upload.fileId,upload.attachment] as const;}));sent.attachments=sent.attachments?.map(a=>{const own=byId.get(a.id);return own?{...own,id:a.id}:a;});}
     return {message:sent};
   }
-  async close() { await this.transport.close(); }
+  async close() { try{await this.voice.close();}finally{await this.transport.close();} }
 }

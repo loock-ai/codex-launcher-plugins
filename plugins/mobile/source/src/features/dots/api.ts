@@ -4,7 +4,7 @@ import type { BackendConfig } from '../../backends/types';
 export interface Dot { id: string; name: string; roomId?: string | null; paused?: boolean }
 export interface DotAttachment { id: string; name: string; type: string; size: number }
 export interface DotMessage { attachments?: DotAttachment[]; id: string; role: 'user' | 'assistant' | 'system'; text: string; createdAt: string; requestId?: string; deleted?: boolean }
-export interface DotsStatus { available: boolean; identityKey?: string; error?: string; capabilities?: { messages: boolean; history: boolean; attachments: boolean; approvals: boolean } }
+export interface DotsStatus { available: boolean; identityKey?: string; error?: string; capabilities?: { messages: boolean; history: boolean; attachments: boolean; approvals: boolean; voice?: boolean } }
 export interface DotsList { dots: Dot[]; nextCursor: string | null }
 export interface DotsMessages { dotName?: string; messages: DotMessage[]; before: string | null }
 
@@ -13,7 +13,7 @@ export class DotsError extends Error {
 }
 
 /** Uses exactly the existing gateway token. Every request is bounded and cancellable. */
-export async function dotsRequest<T>(backend: BackendConfig, path: string, signal: AbortSignal, body?: unknown, headers?: Record<string, string>): Promise<T> {
+export async function dotsRequest<T>(backend: BackendConfig, path: string, signal: AbortSignal, body?: unknown, headers?: Record<string, string>, options?:{keepalive?:boolean}): Promise<T> {
   const controller = new AbortController();
   const abort = () => controller.abort();
   signal.addEventListener('abort', abort, { once: true });
@@ -23,7 +23,7 @@ export async function dotsRequest<T>(backend: BackendConfig, path: string, signa
   if (backend.token) url.searchParams.set('token', backend.token);
   try {
     const response = await fetch(url.toString(), {
-      method: body === undefined ? 'GET' : 'POST', mode: 'cors', signal: controller.signal,
+      method: body === undefined ? 'GET' : 'POST', mode: 'cors', signal: controller.signal,keepalive:options?.keepalive,
       ...(body === undefined ? {} : { headers: headers || { 'Content-Type': 'application/json' }, body: body instanceof File ? body : JSON.stringify(body) }),
     });
     const data = await response.json().catch(() => null) as (T & { error?: string; code?: string }) | null;

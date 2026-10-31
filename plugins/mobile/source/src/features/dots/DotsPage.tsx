@@ -7,6 +7,7 @@ import { MarkdownMessage } from '../../ui/conversation';
 import { createRequestId, dotsRequest, uploadDotAttachment, DotsError, mergeMessages, type Dot, type DotMessage, type DotsList, type DotsMessages, type DotsStatus } from './api';
 import { t, useI18n } from '../../i18n';
 import './dots.css';
+import {VoiceCallButton} from './VoiceCallButton';
 
 type Receipt = { requestId: string; dotName: string; deviceName: string; backendId?: string; dotId?: string; identityKey?: string; hiddenContent?: boolean; text: string; state: 'pending' | 'unknown' };
 const RECEIPTS_KEY = 'codex-mobile:dots-unconfirmed';
@@ -128,6 +129,7 @@ function DeviceDots({ backend, devices, onDeviceChange, onBack, notices, onUnkno
   const unavailable = status && (!status.available || status.capabilities?.messages === false);
   const connection = error || chatState === 'error' ? t('连接中断') : busy || !status ? t('正在连接…') : unavailable ? t('暂不可用') : selected && chatState === 'loading' ? t('正在读取消息…') : t('已连接');
   const singleDot = dots.length === 1 && !cursor;
+  const voiceEnabled=!!selected&&status?.available&&status.capabilities?.voice===true;
   const titleContent = <>
     <span className="dots-title-line"><span>{selected?.name || 'Dots'}</span>{!singleDot && <Chevron direction="down" />}</span>
     <span className="dots-connection"><i className={error || chatState === 'error' ? 'is-error' : status?.available ? 'is-online' : ''} aria-hidden="true" />{backend.name}<span className="dots-connection-divider" aria-hidden="true" />{connection}</span>
@@ -136,9 +138,12 @@ function DeviceDots({ backend, devices, onDeviceChange, onBack, notices, onUnkno
     <header className="dots-header">
       <button className="dots-icon-button" type="button" aria-label={t('返回 Codex')} onClick={onBack}><Chevron direction="left" /></button>
       {singleDot ? <div className="dots-title-static">{titleContent}</div> : <button className="dots-title-button" type="button" aria-label={t('切换 Dot 或设备')} aria-expanded={pickerOpen} onClick={() => setPickerOpen(true)}>{titleContent}</button>}
+      <div className="dots-header-actions">
+      {voiceEnabled&&selected&&<VoiceCallButton key={`${selected.id}:${status?.identityKey??''}`} backend={backend} dotId={selected.id}/>}
       {singleDot && devices.length > 1 ? <button className="dots-icon-button" type="button" aria-label={t('切换设备')} aria-expanded={pickerOpen} onClick={() => setPickerOpen(true)}>
         <svg className="dots-device-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2" /><path d="M8 21h8M12 16v5" /></svg>
-      </button> : <span className="dots-header-spacer" aria-hidden="true" />}
+      </button> : !voiceEnabled&&<span className="dots-header-spacer" aria-hidden="true" />}
+      </div>
     </header>
     {notices}
     {error && <div className="dots-warning" role="alert">{error}<button onClick={() => void load(cursor || undefined)}>{t('重试连接')}</button></div>}

@@ -1,7 +1,7 @@
 export interface DesktopHttpRequest {method:'GET'|'POST';path:string;body?:unknown}
 export interface DesktopHttpTransport {
- status():Promise<{available:boolean;error?:string;code?:string;identityKey?:string}>;
- request(request:DesktopHttpRequest):Promise<{status:number;body:unknown}>;
+ status():Promise<{available:boolean;error?:string;code?:string;identityKey?:string;voiceSignaling?:boolean}>;
+ request(request:DesktopHttpRequest):Promise<{status:number;body:unknown;headers?:Record<string,string>}>;
  close():Promise<void>;
 }
 export interface DotProfile {id:string;name:string;roomId:string|null;threadId?:string;paused?:boolean}

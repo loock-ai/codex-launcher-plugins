@@ -43,10 +43,24 @@ export function createDotsHttp(adapter: DotsAdapter) {
   return async (req: IncomingMessage,res: ServerResponse,url: URL): Promise<void> => {
     try {
       const routes: Record<string,string>={'/api/dots/diagnostics':'GET','/api/dots/status':'GET','/api/dots/list':'GET','/api/dots/messages':'GET','/api/dots/send':'POST','/api/dots/upload':'POST'};
-      const method=routes[url.pathname];
+      const voice=/^\/api\/dots\/voice\/(start|attach|heartbeat|stop)$/.exec(url.pathname);
+      const method=voice?'POST':routes[url.pathname];
       if(!method) throw new DotsError('DOTS_NOT_FOUND','未找到此 Dots 接口',404);
       if(req.method!==method) {res.setHeader('Allow',method);throw new DotsError('DOTS_METHOD_NOT_ALLOWED','此接口不支持该请求方法',405);}
       let result: unknown;
+      if(voice){
+        query(url,[]);const body=await readBody(req);
+        const allowed=voice[1]==='start'?['requestId','dotId','sdp']:['requestId'];
+        if(!body||typeof body!=='object'||Array.isArray(body)||Object.keys(body).some(key=>!allowed.includes(key))||allowed.some(key=>typeof (body as Record<string,unknown>)[key]!=='string'))throw new DotsError('DOTS_INVALID_INPUT','通话参数无效',400);
+        const input=body as {requestId:string;dotId:string;sdp:string};
+        switch(voice[1]){
+          case 'start':result=await adapter.voice.start(input);break;
+          case 'attach':result=await adapter.voice.attach(input.requestId);break;
+          case 'heartbeat':result=await adapter.voice.heartbeat(input.requestId);break;
+          case 'stop':result=await adapter.voice.stop(input.requestId);break;
+        }
+        json(res,200,result);return;
+      }
       switch(url.pathname) {
         case '/api/dots/diagnostics': query(url,[]);result=adapter.diagnostics();break;
         case '/api/dots/status': {query(url,[]);const state=await adapter.status();if(state.code==='DOTS_ACCOUNT_CHANGED')throw new DotsError(state.code,state.error??'桌面账号已变化',409);result=state;break;}
