@@ -342,11 +342,13 @@ jobs:
               "android.permission.ACCESS_NETWORK_STATE",
               "android.permission.CAMERA",
               "android.permission.RECORD_AUDIO",
+              "android.permission.MODIFY_AUDIO_SETTINGS",
               "android.permission.REQUEST_INSTALL_PACKAGES",
           }
           for required_permission in (
               "android.permission.CAMERA",
               "android.permission.RECORD_AUDIO",
+              "android.permission.MODIFY_AUDIO_SETTINGS",
               "android.permission.REQUEST_INSTALL_PACKAGES",
           ):
               if not any(
@@ -925,6 +927,7 @@ jobs:
               "android.permission.ACCESS_NETWORK_STATE",
               "android.permission.CAMERA",
               "android.permission.RECORD_AUDIO",
+              "android.permission.MODIFY_AUDIO_SETTINGS",
               "android.permission.REQUEST_INSTALL_PACKAGES",
               dynamic_receiver_permission,
           }
