@@ -22,9 +22,18 @@
 ## 实施与验证
 
 - [x] Web：先写 Native Bridge 握手/取消/旧事件隔离测试及 Dot 控制器的后台启动、失败、通知挂断、pulse、资源清理测试，再实现。
-- [ ] Native：独立 Kotlin service 与纯 Kotlin lease；保留上游 MainActivity 其他逻辑，通过专用脚本注入 Bridge 和生命周期保护。Android JUnit 覆盖 lease 超时、续期、忙状态及旧 id 停止隔离。
-- [ ] Packaging：保留/补齐 FOREGROUND_SERVICE、FOREGROUND_SERVICE_MICROPHONE、WAKE_LOCK、POST_NOTIFICATIONS；APK 成品校验服务类型、exported=false、权限和类文件。执行真实项目变换的测试；流水线运行 Android unit test 后构建。
-- [ ] 独立审查及完整回归；先推 feature 分支并 dispatch `publish=false` 编译验证，再推 main 自动发布 App 补丁；下载回读验证。
+- [x] Native：独立 Kotlin service 与纯 Kotlin lease；保留上游 MainActivity 其他逻辑，通过专用脚本注入 Bridge 和生命周期保护。Android JUnit 覆盖 lease 超时、续期、忙状态及旧 id 停止隔离。
+- [x] Packaging：保留/补齐 FOREGROUND_SERVICE、FOREGROUND_SERVICE_MICROPHONE、WAKE_LOCK、POST_NOTIFICATIONS；APK 成品校验服务类型、exported=false、权限和类文件。执行真实项目变换的测试；流水线运行 Android unit test 后构建。
+- [x] 独立审查及完整回归；先推 feature 分支并 dispatch `publish=false` 编译验证，再推 main 自动发布 App 补丁；下载回读验证。
 - [ ] 用户手机验收：通话后 Home 与锁屏各保持至少 5 分钟，双向听说、通知栏挂断、返回 App 后状态一致，挂断后无麦克风/唤醒锁残留。没有实机时明确未验收，不用桌面浏览器结果代替。
 
 依据：[Android 前台服务类型](https://developer.android.com/develop/background-work/services/fgs/service-types)、[麦克风前台服务启动限制](https://developer.android.com/develop/background-work/services/fgs/restrictions-bg-start)。
+
+## 发布验证结果
+
+- 功能源码 `d5abe9d6f44ca09e857881e1dda4f00cd088aa3d`。
+- Node 测试 21 项、CI 脚本测试 6 项、Mobile 456 项通过；类型检查和既有受控 Chromium WebRTC 回归通过。
+- [不发布的验证构建](https://github.com/loock-ai/codex-launcher-plugins/actions/runs/41198703335) 先通过，再将同一提交快进 main；[正式构建](https://github.com/loock-ai/codex-launcher-plugins/actions/runs/41199006562) 的 Kotlin/JUnit、APK 校验与发布均成功。
+- [App 0.2.36](https://github.com/loock-ai/codex-launcher-plugins/releases/tag/v0.2.36) 已公开，下载回读 SHA-256：`fc67232431c599c8db325e3ca301ec5dcf45d6bd838a5b107e464851a3ce44a5`。
+- 成品检查确认录音、音频设置、前台麦克风服务、通知和唤醒锁权限，以及服务、租约类和三个 Bridge 方法存在；更新索引版本和 APK 摘要匹配。
+- 没有连接用户手机调试，真实锁屏持续双向声音及通知挂断仍需用户验收，未将包级验证当成实机通过。
