@@ -7,9 +7,11 @@ on:
     paths:
       - "plugins/mobile/source/**"
       - "plugins/mobile/app/assets/**"
+      - "plugins/mobile/app/android/**"
       - "plugins/mobile/app/version.json"
       - "plugins/mobile/app/compose-icon.sh"
       - "scripts/build-mobile-web.mjs"
+      - "scripts/configure-android-voice-background.py"
       - "scripts/mobile-app-version.mjs"
       - "scripts/validate-mobile-app-index.mjs"
       - "package.json"
