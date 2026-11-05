@@ -40,15 +40,18 @@ const modules = new Map();
 function moduleCandidates() {
   const base = new URL(location.href);
   const resources = performance.getEntriesByType('resource').map(entry => entry.name);
-  const elements = Array.from(document.querySelectorAll('script[type="module"][src], link[rel="modulepreload"][href]'));
+  const entries = Array.from(document.querySelectorAll('script[type="module"][src]'), element => element.src);
+  const preloads = Array.from(document.querySelectorAll('link[rel="modulepreload"][href]'), element => element.href);
   const urls = new Set();
-  for (const value of [...resources, ...elements.map(element => element.src || element.href)]) {
+  for (const value of [...resources, ...entries, ...preloads]) {
     try {
       const url = new URL(value, base);
-      // 仅加载当前桌面的共享模块，不遍历或执行任意远端代码。
+      // 只检查同源共享模块和页面已声明的构建入口。
       if (url.protocol === base.protocol && url.host === base.host &&
           url.pathname.startsWith(new URL('./assets/', base).pathname) &&
-          /\/app-shared-[^/]+\.js$/.test(url.pathname) && !url.search && !url.hash) urls.add(url.href);
+          (/\/app-shared-[^/]+\.js$/.test(url.pathname) ||
+           (entries.includes(value) && /^\d+\.[a-f0-9]+\.js$/.test(url.pathname.split('/').pop()))) &&
+          !url.search && !url.hash) urls.add(url.href);
     } catch { /* 无效资源地址不参与模块检测。 */ }
   }
   return [...urls].slice(0, 8);
@@ -60,6 +63,18 @@ function hasCacheService(value) {
       typeof value.appServerManagers?.open === 'function';
   } catch { return false; }
 }
+function findServices(native) {
+  const shared = Object.values(native).find(hasCacheService);
+  if (shared) return shared;
+  // Rspack 将服务放在运行时缓存中。只读已执行模块，避免调用模块工厂。
+  const loaded = native.__webpack_require__?.c;
+  for (const record of Object.values(loaded ?? {})) {
+    const exports = record?.exports;
+    if (!Object.hasOwn(exports ?? {}, 'setAppServices')) continue;
+    const services = exports.appServices;
+    if (hasCacheService(services)) return services;
+  }
+}
 let services;
 for (let attempt = 0; attempt < 40 && !stopped; attempt++) {
   for (const moduleUrl of moduleCandidates()) {
@@ -69,7 +84,7 @@ for (let attempt = 0; attempt < 40 && !stopped; attempt++) {
     }
     if (stopped) return;
     const native = modules.get(moduleUrl);
-    if (native) services = Object.values(native).find(hasCacheService);
+    if (native) services = findServices(native);
     if (services) break;
   }
   if (services) break;
