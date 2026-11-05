@@ -8,7 +8,7 @@ import {uploadToDesktop} from './control-upload.js';
 import type {DotsAdapter} from '../dots/adapter.js';
 import {createDotsHttp} from '../dots/http.js';
 
-export function controlHttp(options:{channel:DesktopControlChannel;token:string;staticDir?:string;dots?:DotsAdapter}){
+export function controlHttp(options:{identity?:{hostId:string;displayName:string};channel:DesktopControlChannel;token:string;staticDir?:string;dots?:DotsAdapter}){
  const computerName=readComputerName();
  const dotsHttp=options.dots?createDotsHttp(options.dots):null;
  return async(req:IncomingMessage,res:ServerResponse)=>{
@@ -29,8 +29,8 @@ export function controlHttp(options:{channel:DesktopControlChannel;token:string;
     if(hostId!=='local'&&!remote){res.writeHead(404);res.end(JSON.stringify({error:'桌面没有该远程主机'}));return;}
     if(url.pathname==='/api/uploads/file'){await uploadToDesktop(req,res,options.channel,hostId);return;}
     if(url.pathname==='/api/status')res.end(JSON.stringify({...options.channel.status(),capabilities:{...options.channel.status().capabilities,dots:!!options.dots}}));
-    else if(url.pathname==='/api/desktop/hosts'){const name=await computerName;res.end(JSON.stringify({data:(await options.channel.hosts()).map(host=>host.hostId==='local'?{...host,displayName:name}:host)}));}
-    else if(url.pathname==='/api/host')res.end(JSON.stringify({hostId:hostname()+'-desktop-control'+(remote?':'+hostId:''),displayName:remote?.displayName??await computerName,hostname:hostname(),gatewayVersion:'0.2.0',appServerReady:options.channel.status().connected,backend:'desktop-control'}));
+    else if(url.pathname==='/api/desktop/hosts'){const name=await computerName;res.end(JSON.stringify({data:(await options.channel.hosts()).map(host=>host.hostId==='local'?{...host,displayName:options.identity?.displayName??name}:host)}));}
+    else if(url.pathname==='/api/host')res.end(JSON.stringify({hostId:options.identity?.hostId??hostname()+'-desktop-control'+(remote?':'+hostId:''),displayName:remote?.displayName??options.identity?.displayName??await computerName,hostname:hostname(),gatewayVersion:'0.2.0',appServerReady:options.channel.status().connected,backend:'desktop-control'}));
     else if(url.pathname==='/api/projects'){
      const projects=new Set<string>(),seen=new Set<string>();let cursor:string|null=null;
      for(let count=0;;count++){

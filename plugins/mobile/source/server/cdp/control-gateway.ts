@@ -6,7 +6,7 @@ import {controlHttp} from './control-http.js';
 import type {DotsAdapter} from '../dots/adapter.js';
 
 export interface ControlGatewayStatus {clients:number;approvals:number;connected:boolean;error:string}
-export async function createControlGateway(options:{channel:DesktopControlChannel;host:string;port:number;token:string;staticDir?:string;dots?:DotsAdapter;onStatus?:(status:ControlGatewayStatus)=>void}){
+export async function createControlGateway(options:{identity?:{hostId:string;displayName:string};channel:DesktopControlChannel;host:string;port:number;token:string;staticDir?:string;dots?:DotsAdapter;onStatus?:(status:ControlGatewayStatus)=>void}){
  assertGatewaySecurity(options.host,options.token);if(!options.token)throw new Error('控制通道必须配置访问口令');
  await options.channel.connect();
  const clients=new Map<WebSocket,{initialized:boolean;active:boolean;hostId:string;threads:Set<string>|null;delivered:Set<string|number>}>();
