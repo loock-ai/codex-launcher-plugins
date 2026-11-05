@@ -1,3 +1,4 @@
+import {handleRestartGpt} from './restart-gpt.js';
 import { createServer, type Server } from "node:http";
 import { createReadStream } from "node:fs";
 import { mkdir, open, readFile, rm, stat } from "node:fs/promises";
@@ -6,6 +7,8 @@ import { extname, isAbsolute, join, normalize } from "node:path";
 import WebSocket, { WebSocketServer } from "ws";
 
 export interface GatewayOptions {
+  restartGpt?:()=>Promise<unknown>;
+  onRestartError?:(error:unknown)=>void;
   onClientCount?: (count: number) => void;
   host: string;
   port: number;
@@ -98,6 +101,7 @@ export async function createGateway(options: GatewayOptions): Promise<Gateway> {
     const url = new URL(request.url ?? "/", "http://gateway.local");
     const origin = request.headers.origin;
     const controlRequest = [
+      "/api/desktop/restart",
       "/api/status",
       "/api/host",
       "/api/projects",
@@ -128,6 +132,9 @@ export async function createGateway(options: GatewayOptions): Promise<Gateway> {
       response.end();
       return;
     }
+    if (url.pathname === "/api/desktop/restart") {
+      handleRestartGpt(request,response,options.restartGpt,options.onRestartError);return;
+    }
     if (url.pathname === "/api/host") {
       let appServerReady = false;
       try {
@@ -140,6 +147,7 @@ export async function createGateway(options: GatewayOptions): Promise<Gateway> {
       response.setHeader("content-type", "application/json; charset=utf-8");
       response.end(
         JSON.stringify({
+          ...(options.restartGpt?{capabilities:{restartGpt:true}}:{}),
           hostId: options.hostId ?? "local",
           displayName:
             options.displayName ?? options.hostname ?? options.hostId ?? "Codex",

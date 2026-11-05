@@ -13,6 +13,12 @@ export type LanguagePreference = "system" | Locale;
 const LANGUAGE_STORAGE_KEY = "codex-mobile:language";
 
 const english: Record<string, string> = {
+  "重启GPT": "Restart GPT",
+  "请求中…": "Requesting…",
+  "请先选择要重启的设备": "Select a device to restart",
+  "设备连接暂不可用": "Device connection is unavailable",
+  "当前设备的启动器需要更新后才能重启GPT": "Update this device's launcher to restart GPT",
+  "重启请求结果未确认，请等待设备重新连接": "Restart request is unconfirmed. Wait for the device to reconnect.",
   "请先允许麦克风权限，再发起通话。": "Allow microphone access before starting a call.",
   "请回到 App 发起语音通话，再切到后台。": "Return to the app to start a voice call, then switch to the background.",
   "请从 App 内的对话页发起语音通话。": "Start the voice call from a conversation inside the app.",

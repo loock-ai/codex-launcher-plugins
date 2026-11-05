@@ -1,3 +1,4 @@
+import {handleRestartGpt} from '../restart-gpt.js';
 import type {IncomingMessage,ServerResponse} from 'node:http';
 import {readFile,stat} from 'node:fs/promises';
 import {resolve,sep,extname} from 'node:path';
@@ -8,7 +9,7 @@ import {uploadToDesktop} from './control-upload.js';
 import type {DotsAdapter} from '../dots/adapter.js';
 import {createDotsHttp} from '../dots/http.js';
 
-export function controlHttp(options:{identity?:{hostId:string;displayName:string};channel:DesktopControlChannel;token:string;staticDir?:string;dots?:DotsAdapter}){
+export function controlHttp(options:{restartGpt?:()=>Promise<unknown>;onRestartError?:(error:unknown)=>void;identity?:{hostId:string;displayName:string};channel:DesktopControlChannel;token:string;staticDir?:string;dots?:DotsAdapter}){
  const computerName=readComputerName();
  const dotsHttp=options.dots?createDotsHttp(options.dots):null;
  return async(req:IncomingMessage,res:ServerResponse)=>{
@@ -17,6 +18,7 @@ export function controlHttp(options:{identity?:{hostId:string;displayName:string
    if(api&&authorized&&req.headers.origin){res.setHeader('Access-Control-Allow-Origin',req.headers.origin);res.setHeader('Vary','Origin');res.setHeader('Access-Control-Allow-Methods','GET, POST, OPTIONS');res.setHeader('Access-Control-Allow-Headers','content-type,x-codex-file-name');res.setHeader('Access-Control-Allow-Credentials','true');}
    if(req.method==='OPTIONS'){res.writeHead(authorized?204:401);res.end();return;}
    if(api&&!authorized){res.writeHead(401);res.end();return;}
+   if(url.pathname==='/api/desktop/restart'){handleRestartGpt(req,res,options.restartGpt,options.onRestartError);return;}
    if(url.pathname.startsWith('/api/dots/')){
     if(!dotsHttp){res.writeHead(503,{'content-type':'application/json'});res.end(JSON.stringify({error:'此连接尚未启用 Dots 适配',code:'DOTS_UNAVAILABLE'}));return;}
     const requestUrl=new URL(url);requestUrl.searchParams.delete('token');await dotsHttp(req,res,requestUrl);return;
@@ -30,7 +32,7 @@ export function controlHttp(options:{identity?:{hostId:string;displayName:string
     if(url.pathname==='/api/uploads/file'){await uploadToDesktop(req,res,options.channel,hostId);return;}
     if(url.pathname==='/api/status')res.end(JSON.stringify({...options.channel.status(),capabilities:{...options.channel.status().capabilities,dots:!!options.dots}}));
     else if(url.pathname==='/api/desktop/hosts'){const name=await computerName;res.end(JSON.stringify({data:(await options.channel.hosts()).map(host=>host.hostId==='local'?{...host,displayName:options.identity?.displayName??name}:host)}));}
-    else if(url.pathname==='/api/host')res.end(JSON.stringify({hostId:options.identity?.hostId??hostname()+'-desktop-control'+(remote?':'+hostId:''),displayName:remote?.displayName??options.identity?.displayName??await computerName,hostname:hostname(),gatewayVersion:'0.2.0',appServerReady:options.channel.status().connected,backend:'desktop-control'}));
+    else if(url.pathname==='/api/host')res.end(JSON.stringify({hostId:options.identity?.hostId??hostname()+'-desktop-control'+(remote?':'+hostId:''),displayName:remote?.displayName??options.identity?.displayName??await computerName,hostname:hostname(),gatewayVersion:'0.2.0',appServerReady:options.channel.status().connected,backend:'desktop-control',...(options.restartGpt?{capabilities:{restartGpt:true}}:{})}));
     else if(url.pathname==='/api/projects'){
      const projects=new Set<string>(),seen=new Set<string>();let cursor:string|null=null;
      for(let count=0;;count++){

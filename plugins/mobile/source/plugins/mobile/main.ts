@@ -40,6 +40,8 @@ async function controlProxy(ctx:Context,leaseId:string){
 export async function activate(ctx:Context){
  let config=validate(await ctx.config.read(defaults()));
  await ctx.config.write(config);
+ let canRestartGpt=false;try{canRestartGpt=(await ctx.host.call('desktop.details')).restartGpt===true;}catch{}
+ const restartOptions=canRestartGpt?{restartGpt:()=>ctx.host.call('desktop.restart'),onRestartError:(error:unknown)=>ctx.log(error instanceof Error?error.message:'重启GPT请求失败')}:{};
  let state='stopped',error='',clients=0,approvals=0,port=config.gatewayPort;
  let service:{close():Promise<void>;port:number}|undefined,managed:Awaited<ReturnType<typeof startManagedAppServer>>|undefined,channel:DesktopControlChannel|undefined;
  const logs:string[]=[];
@@ -61,11 +63,11 @@ export async function activate(ctx:Context){
    const {leaseId}=await ctx.host.call(nativeLocal?'desktop.native.acquire':'desktop.acquire');
    try{channel=await controlProxy(ctx,leaseId);}catch(e){await ctx.host.call('desktop.release',{leaseId});throw e;}
    const dots=new DotsAdapter({status:()=>ctx.host.call('desktop.dots.status',{leaseId}),request:async(request)=>{try{return await ctx.host.call('desktop.dots.request',{leaseId,request});}catch(e:any){throw new DotsError(e.code??'DOTS_UNAVAILABLE',e.message);}},close:async()=>{}});
-   service=await createControlGateway({channel,dots,host:config.host,port:config.gatewayPort,token:config.token,staticDir:join(ctx.pluginDir,'web'),onStatus:s=>{clients=s.clients;approvals=s.approvals;error=s.error;if(!s.connected&&s.error)state='waiting';publish();}});
+   service=await createControlGateway({...restartOptions,channel,dots,host:config.host,port:config.gatewayPort,token:config.token,staticDir:join(ctx.pluginDir,'web'),onStatus:s=>{clients=s.clients;approvals=s.approvals;error=s.error;if(!s.connected&&s.error)state='waiting';publish();}});
   }else{
    const upstream=config.mode==='managed'?`ws://127.0.0.1:${config.appServerPort}`:config.upstreamUrl;
    if(config.mode==='managed'){const details=await ctx.host.call('desktop.details');managed=await startManagedAppServer(config.appServerPort,details.cliPath);const child=managed;void child.exited.then(code=>{if(managed===child){void serial(async()=>{if(managed!==child)return;await close();state='error';error=`app-server 意外退出：${code}`;publish();});}});}
-   service=await createGateway({host:config.host,port:config.gatewayPort,mode:config.mode as 'managed'|'external',upstreamUrl:upstream,staticDir:join(ctx.pluginDir,'web'),accessToken:config.token,uploadDir:join(ctx.dataDir,'uploads'),hostId:hostname(),displayName:'Codex Mobile',onClientCount:count=>{clients=count;publish();},appServerReady:async()=>{try{const url=new URL(upstream);url.protocol=url.protocol==='wss:'?'https:':'http:';url.pathname='/readyz';return (await fetch(url,{signal:AbortSignal.timeout(2000)})).ok;}catch{return false;}}});
+   service=await createGateway({...restartOptions,host:config.host,port:config.gatewayPort,mode:config.mode as 'managed'|'external',upstreamUrl:upstream,staticDir:join(ctx.pluginDir,'web'),accessToken:config.token,uploadDir:join(ctx.dataDir,'uploads'),hostId:hostname(),displayName:'Codex Mobile',onClientCount:count=>{clients=count;publish();},appServerReady:async()=>{try{const url=new URL(upstream);url.protocol=url.protocol==='wss:'?'https:':'http:';url.pathname='/readyz';return (await fetch(url,{signal:AbortSignal.timeout(2000)})).ok;}catch{return false;}}});
   }
   port=service.port;state='running';log(`Mobile 已启动（${config.mode}，端口 ${port}）`);publish();return getStatus();
  }catch(e:any){await close().catch(()=>{});state='error';error=e.message;log(error);publish();throw e;}

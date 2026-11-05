@@ -1,3 +1,4 @@
+import {selectRestartGateway,requestRestartGpt} from './backends/restart-gpt';
 import {isDesktopEnvironment} from './ui/desktop-layout';
 import {DotsPage} from "./features/dots/DotsPage";
 import {
@@ -2105,6 +2106,9 @@ function ConfiguredApp({
   const [summaries, setSummaries] = useState<
     Record<string, BackendRuntimeSummary>
   >({});
+  const [restartingGpt,setRestartingGpt]=useState(false);
+  const [restartGptError,setRestartGptError]=useState('');
+  const restartGptBusy=useRef(false);
   const [managerOpen, setManagerOpen] = useState(false);
   const [snapshots, setSnapshots] = useState<
     Record<string, BackendThreadSnapshot>
@@ -2363,7 +2367,7 @@ function ConfiguredApp({
         )
       ? "error"
       : "loading";
-  const listError = [...scopedSnapshots.map((snapshot) => snapshot.error), desktopBackends.error]
+  const listError = [restartGptError,...scopedSnapshots.map((snapshot) => snapshot.error), desktopBackends.error]
     .filter(Boolean)
     .join("；");
   const openingThreadId =
@@ -2519,6 +2523,14 @@ function ConfiguredApp({
     [mountedBackends, selectBackend],
   );
 
+  const restartTarget=selectRestartGateway(mountedBackends,listBackendId);
+  const restartGpt=async()=>{
+    if(!restartTarget||restartGptBusy.current)return;
+    restartGptBusy.current=true;setRestartingGpt(true);setRestartGptError('');
+    try{await requestRestartGpt(restartTarget);}
+    catch(error){setRestartGptError(error instanceof Error?error.message:t('设备连接暂不可用'));}
+    finally{restartGptBusy.current=false;setRestartingGpt(false);}
+  };
   if (!selectedBackend) {
     return <main className="app-shell"><div className="empty-state"><p>{t("没有展示的主机，请在设备管理中开启。")}</p><button type="button" onClick={()=>{window.location.hash="dots";}}>Dots</button><button type="button" onClick={()=>setManagerOpen(true)}>{t("管理设备")}</button></div>
       <BackendManagerSheet open={managerOpen} registry={registry} summaries={summaries} onChange={persistRegistry} onClose={()=>setManagerOpen(false)}/>
@@ -2578,6 +2590,10 @@ function ConfiguredApp({
             onOpenThread={openThread}
             onNewChat={startNewChat}
             onSelectBackend={selectListBackend}
+            onRestartGpt={restartGpt}
+            restartingGpt={restartingGpt}
+            canRestartGpt={!!restartTarget}
+            restartGptTargetLabel={restartTarget?new URL(restartTarget.baseUrl).host:undefined}
             onManageBackends={() => setManagerOpen(true)}
             onRefresh={refreshAllBackends}
             onToggleProject={toggleProject}
