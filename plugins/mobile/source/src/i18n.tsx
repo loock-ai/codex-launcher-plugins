@@ -16,6 +16,7 @@ const english: Record<string, string> = {
   "重启GPT": "Restart GPT",
   "重启GPT {name}": "Restart GPT on {name}",
   "正在重启…": "Restarting…",
+  "桌面正在重启，网页保持在线": "Desktop is restarting. The web connection stays online.",
   "桌面重连尚未确认，请稍后查看连接状态": "Desktop reconnection is not confirmed yet. Check its connection status shortly.",
   "请求中…": "Requesting…",
   "请先选择要重启的设备": "Select a device to restart",
