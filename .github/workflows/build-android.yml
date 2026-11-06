@@ -259,11 +259,14 @@ jobs:
           packages: platform-tools
 
       - name: Install ImageMagick
+        timeout-minutes: 4
         shell: bash
         run: |
           set -euo pipefail
-          sudo apt-get update
-          sudo apt-get install --yes imagemagick
+          if ! command -v convert >/dev/null 2>&1; then
+            sudo apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 update
+            sudo apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 install --yes --no-install-recommends imagemagick
+          fi
           convert --version
 
       - name: Configure PakePlus for embedded HTML
