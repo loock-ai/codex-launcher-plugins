@@ -11,8 +11,8 @@ async function setup(mode='external'){
  const dir=await mkdtemp(join(tmpdir(),'mobile-plugin-'));cleanup.push(()=>rm(dir,{recursive:true,force:true}));await mkdir(join(dir,'web'));await writeFile(join(dir,'web/index.html'),'独立插件网页');
  const port=await new Promise<number>(resolve=>{const s=createServer();s.listen(0,'127.0.0.1',()=>{const p=(s.address() as any).port;s.close(()=>resolve(p));});});
  let config:any={mode,gatewayPort:port,appServerPort:port+1,host:'127.0.0.1',token:'a'.repeat(24),upstreamUrl:'ws://127.0.0.1:18765'};
- const actions=new Map<string,Function>(),calls:any[]=[];let listener=(event:any)=>{};
- const ctx:any={pluginDir:dir,dataDir:dir,signal:new AbortController().signal,config:{read:async()=>config,write:async(v:any)=>{config=v;}},actions:{register:(n:string,h:Function)=>actions.set(n,h)},status:{publish:()=>{}},onDispose:()=>{},log:()=>{},host:{subscribe:(fn:any)=>{listener=fn;return()=>{}},call:async(method:string,p:any)=>{calls.push([method,p]);if(method==='desktop.details')return {appPath:'/Applications/ChatGPT.app',cdpPort:9333,cliPath:'/unused',nativeControlApi:true};if(method==='desktop.acquire'||method==='desktop.native.acquire')return {leaseId:'mobile-lease'};if(method==='desktop.control.status')return {connected:true,capabilities:{}};if(method==='desktop.control.pendingApprovals')return [];if(method==='desktop.control.hosts')return [{hostId:'local'}];return {};}}};
+ const actions=new Map<string,Function>(),calls:any[]=[];let leases=0;let listener=(event:any)=>{};
+ const ctx:any={pluginDir:dir,dataDir:dir,signal:new AbortController().signal,config:{read:async()=>config,write:async(v:any)=>{config=v;}},actions:{register:(n:string,h:Function)=>actions.set(n,h)},status:{publish:()=>{}},onDispose:()=>{},log:()=>{},host:{subscribe:(fn:any)=>{listener=fn;return()=>{}},call:async(method:string,p:any)=>{calls.push([method,p]);if(method==='desktop.details')return {appPath:'/Applications/ChatGPT.app',cdpPort:9333,cliPath:'/unused',nativeControlApi:true};if(method==='desktop.acquire'||method==='desktop.native.acquire')return {leaseId:++leases===1?'mobile-lease':'mobile-lease-'+leases};if(method==='desktop.control.status')return {connected:true,capabilities:{}};if(method==='desktop.control.pendingApprovals')return [];if(method==='desktop.control.hosts')return [{hostId:'local'}];return {};}}};
  vi.stubEnv('CODEX_HOME',join(dir,'desktop-auth-fixture'));
  const runtime=await activate(ctx);cleanup.push(()=>runtime.deactivate());return {runtime,actions,calls,port,ctx,dir,emit:(event:any)=>listener(event)};
 }
@@ -43,7 +43,7 @@ it('managed模式启动插件拥有的子进程并在停止时回收',async()=>{
  const config=await actions.get('config.read')!();await runtime.start();expect((await fetch(`http://127.0.0.1:${config.appServerPort}/readyz`)).ok).toBe(true);expect((await fetch(`http://127.0.0.1:${port}/api/host?token=${'a'.repeat(24)}`)).ok).toBe(true);await runtime.stop();await expect(fetch(`http://127.0.0.1:${config.appServerPort}/readyz`)).rejects.toThrow();
 });
 
-it('断线进入等待后重试重新申请桌面租约并重建HTTP服务',async()=>{const {runtime,calls,emit,port}=await setup('cdp');await runtime.start();emit({type:'desktop.event',leaseId:'mobile-lease',event:{method:'desktop/disconnected',params:{reason:'断线'}}});expect(runtime.getStatus().state).toBe('waiting');await runtime.start();expect(calls.filter(c=>c[0]==='desktop.acquire')).toHaveLength(2);expect(runtime.getStatus().state).toBe('running');expect((await fetch(`http://127.0.0.1:${port}/api/status?token=${'a'.repeat(24)}`)).ok).toBe(true);});
+it('断线进入等待后重试重新申请桌面租约并保留HTTP服务',async()=>{const {runtime,calls,emit,port}=await setup('cdp');await runtime.start();emit({type:'desktop.event',leaseId:'mobile-lease',event:{method:'desktop/disconnected',params:{reason:'断线'}}});expect(runtime.getStatus().state).toBe('waiting');await runtime.start();expect(calls.filter(c=>c[0]==='desktop.acquire')).toHaveLength(2);expect(runtime.getStatus().state).toBe('running');expect((await fetch(`http://127.0.0.1:${port}/api/status?token=${'a'.repeat(24)}`)).ok).toBe(true);});
 it('本机原生模式直接取得桌面现有API租约，项目和会话沿用前端协议且不要求云端授权',async()=>{
  const {runtime,actions,calls,port}=await setup('native');
  await runtime.start();
@@ -102,4 +102,26 @@ it('旧托管进程在切换期间退出，迟到的故障回调不会关闭新�
   expect(runtime.getStatus()).toMatchObject({state:'running',mode:'native'});
   expect((await fetch(`http://127.0.0.1:${port}/api/status?token=${'a'.repeat(24)}`)).ok).toBe(true);
  }finally{mock.mockRestore();}
+});
+
+it.each(['cdp','native'])('重启%s桌面只替换租约，HTTP和同一WebSocket跨两轮暂停恢复持续在线',async(mode)=>{
+ const {runtime,port,calls,ctx}=await setup(mode);await runtime.start();
+ const {default:WebSocket}=await import('ws');const socket=new WebSocket(`ws://127.0.0.1:${port}/ws?token=${'a'.repeat(24)}`);cleanup.push(async()=>socket.terminate());
+ await new Promise<void>((resolve,reject)=>{socket.once('open',resolve);socket.once('error',reject);});
+ let seq=0;const request=(method:string)=>new Promise<any>((resolve,reject)=>{const id=++seq;const timer=setTimeout(()=>reject(Error('RPC timeout')),1000);const receive=(raw:any)=>{const m=JSON.parse(String(raw));if(m.id===id){clearTimeout(timer);socket.off('message',receive);resolve(m);}};socket.on('message',receive);socket.send(JSON.stringify({id,method,params:{}}));});
+ await request('initialize');
+ for(let cycle=0;cycle<2;cycle++){
+  await (runtime as any).suspendDesktop();
+  expect((await fetch(`http://127.0.0.1:${port}/`)).ok).toBe(true);
+  expect((await request('desktop/status')).result.connected).toBe(false);
+  expect((await request('thread/list')).error.data.code).toBe('DESKTOP_NOT_READY');
+  if(cycle===0){const original=ctx.host.call;ctx.host.call=async(method:string,p:any)=>{if(method==='desktop.acquire'||method==='desktop.native.acquire')throw Object.assign(Error('not ready'),{code:'DESKTOP_NOT_READY'});return original(method,p);};await expect(runtime.start()).rejects.toMatchObject({code:'DESKTOP_NOT_READY'});expect((await fetch(`http://127.0.0.1:${port}/`)).ok).toBe(true);ctx.host.call=original;}
+  await runtime.start();
+  expect((await request('desktop/status')).result.connected).toBe(true);
+  expect((await request('thread/list')).error).toBeUndefined();
+  expect(socket.readyState).toBe(WebSocket.OPEN);
+  const host=await (await fetch(`http://127.0.0.1:${port}/api/host?token=${'a'.repeat(24)}`)).json();expect(host.desktopRestartGeneration).toBe(cycle+1);expect(host.appServerReady).toBe(true);
+  await fetch(`http://127.0.0.1:${port}/api/dots/status?token=${'a'.repeat(24)}`);expect(calls.filter(c=>c[0]==='desktop.dots.status').at(-1)?.[1].leaseId).toBe('mobile-lease-'+(cycle+2));
+ }
+ expect(calls.filter(c=>c[0]===(mode==='native'?'desktop.native.acquire':'desktop.acquire'))).toHaveLength(3);
 });

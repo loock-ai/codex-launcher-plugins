@@ -309,12 +309,13 @@ describe("多设备界面", () => {
 it('每台设备的重启GPT位于编辑前面，并操作点击的设备',async()=>{
  cleanup();
  const api=await import('../../src/backends/restart-gpt');
- const restart=vi.spyOn(api,'requestRestartGpt').mockResolvedValue();
+ let finish!:(value:boolean)=>void;const restart=vi.spyOn(api,'restartGptAndWait').mockImplementation(()=>new Promise<boolean>(resolve=>{finish=resolve;}));
  try{
   render(<BackendManagerSheet open registry={{version:1,selectedBackendId:mini.id,backends:[mini,macbook]}} summaries={summaries} onChange={()=>{}} onClose={()=>{}} discoverHosts={async()=>null}/>);
   const miniRestart=screen.getByRole('button',{name:'重启GPT Mac mini'});
   expect(miniRestart.nextElementSibling).toBe(screen.getByRole('button',{name:'编辑 Mac mini'}));
   fireEvent.click(screen.getByRole('button',{name:'重启GPT MacBook'}));
   await waitFor(()=>expect(restart).toHaveBeenCalledExactlyOnceWith(macbook));
+  const button=screen.getByRole('button',{name:'重启GPT MacBook'});expect(button.getAttribute('aria-busy')).toBe('true');expect(button.querySelector('.action-spinner')).not.toBeNull();expect((button as HTMLButtonElement).disabled).toBe(true);fireEvent.click(button);expect(restart).toHaveBeenCalledTimes(1);finish(true);await waitFor(()=>expect(button.getAttribute('aria-busy')).toBe('false'));
  }finally{restart.mockRestore();}
 });

@@ -579,6 +579,8 @@ function BackendWorkspace({
           ) {
             threadNotificationSequenceRef.current += 1;
           }
+          if (message.method === "desktop/restarting") { setError(params.reason ?? "桌面正在重启，网页保持在线"); setRequests([]); requestReplyLocks.current.clear(); setBusy(false); }
+          if (message.method === "desktop/reconnected") { setError(""); void loadThreads(client).catch(() => undefined); }
           if (message.method === "desktop/disconnected") { setError(params.reason ?? "桌面控制通道断开"); manager.socket(backend.id)?.close(1011, "desktop disconnected"); }
           if (message.method === "desktop/error") setError(params.message ?? t("桌面操作未确认，请在桌面核对"));
           if (message.method === "desktop/approval/resolved" || message.method === "serverRequest/resolved") {

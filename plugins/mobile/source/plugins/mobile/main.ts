@@ -26,16 +26,20 @@ function validate(c:Config):Config {
  }
  return {mode,gatewayPort:c.gatewayPort,appServerPort:c.appServerPort,host:c.host,token:c.token,upstreamUrl:c.upstreamUrl};
 }
-async function controlProxy(ctx:Context,leaseId:string){
+async function controlProxy(ctx:Context,initialLeaseId:string,acquireMethod:string){
+ let leaseId:string|undefined=initialLeaseId;
  let status=await ctx.host.call('desktop.control.status',{leaseId}),pending:ControlEvent[]=await ctx.host.call('desktop.control.pendingApprovals',{leaseId}),closed=false;
  const listeners=new Set<(event:ControlEvent)=>void>();
- const call=async(method:string,params:any={})=>{try{return await ctx.host.call('desktop.control.'+method,{leaseId,...params});}catch(error:any){throw new ControlError(error.code??'DESKTOP_UNAVAILABLE',error.message);}};
+ const call=async(method:string,params:any={})=>{if(closed)throw new ControlError('CHANNEL_LOST','旧桌面连接已关闭');if(!leaseId)throw new ControlError('DESKTOP_NOT_READY','桌面正在重启，请稍后重试');try{return await ctx.host.call('desktop.control.'+method,{leaseId,...params});}catch(error:any){throw new ControlError(error.code??'DESKTOP_UNAVAILABLE',error.message);}};
  const unsubscribe=ctx.host.subscribe(message=>{if(message.type!=='desktop.event'||message.leaseId!==leaseId)return;const event=message.event as ControlEvent;
  if(event.method==='desktop/disconnected')status={...status,connected:false};
  if(event.id!==undefined){pending=pending.filter(p=>p.id!==event.id);pending.push(event);}if(event.method==='desktop/approval/resolved')pending=pending.filter(p=>p.id!==event.params?.id);
  for(const fn of listeners)fn(event);
  });
- return {connect:async()=>{},status:()=>status,pendingApprovals:()=>pending,hosts:()=>call('hosts'),request:(hostId:string,method:string,params:any,timeoutMs?:number)=>call('request',{hostId,method,params,timeoutMs}),respond:async(approvalId:string|number,result:unknown)=>{const value=await call('respond',{approvalId,result});pending=pending.filter(p=>p.id!==approvalId);return value;},subscribe:(fn:(event:ControlEvent)=>void)=>{listeners.add(fn);return()=>listeners.delete(fn);},setUserQuestionTargets:(targets:unknown)=>{void call('setUserQuestionTargets',{targets}).catch(e=>ctx.log(e.message));},refreshUserQuestions:async(targets:unknown)=>{await call('refreshUserQuestions',{targets});pending=await call('pendingApprovals');status=await call('status');},close:async()=>{if(closed)return;closed=true;unsubscribe();listeners.clear();await ctx.host.call('desktop.release',{leaseId});}} as unknown as DesktopControlChannel;
+ const emit=(event:ControlEvent)=>{for(const fn of listeners)fn(event);};
+ const suspendDesktop=async()=>{if(closed||!leaseId)return;const old=leaseId;leaseId=undefined;status={...status,connected:false,desktopRestartGeneration:(status.desktopRestartGeneration??0)+1};pending=[];emit({method:'desktop/restarting',params:{reason:'桌面正在重启，网页保持在线'}});await ctx.host.call('desktop.release',{leaseId:old});};
+ const resumeDesktop=async()=>{if(closed)throw new ControlError('CHANNEL_LOST','连接已关闭');if(leaseId&&status.connected)return;await suspendDesktop();const next=await ctx.host.call(acquireMethod);try{status={...await ctx.host.call('desktop.control.status',next),desktopRestartGeneration:status.desktopRestartGeneration??0};pending=await ctx.host.call('desktop.control.pendingApprovals',next);leaseId=next.leaseId;emit({method:'desktop/reconnected'});}catch(error){await ctx.host.call('desktop.release',next);throw error;}};
+ return {suspendDesktop,resumeDesktop,currentLease:()=>{if(!leaseId)throw new ControlError('DESKTOP_NOT_READY','桌面正在重启，请稍后重试');return leaseId;},connect:async()=>{},status:()=>status,pendingApprovals:()=>pending,hosts:()=>call('hosts'),request:(hostId:string,method:string,params:any,timeoutMs?:number)=>call('request',{hostId,method,params,timeoutMs}),respond:async(approvalId:string|number,result:unknown)=>{const value=await call('respond',{approvalId,result});pending=pending.filter(p=>p.id!==approvalId);return value;},subscribe:(fn:(event:ControlEvent)=>void)=>{listeners.add(fn);return()=>listeners.delete(fn);},setUserQuestionTargets:(targets:unknown)=>{void call('setUserQuestionTargets',{targets}).catch(e=>{if(e.code!=='DESKTOP_NOT_READY')ctx.log(e.message);});},refreshUserQuestions:async(targets:unknown)=>{const current=leaseId;await call('refreshUserQuestions',{targets});const nextPending=await call('pendingApprovals'),nextStatus=await call('status');if(leaseId===current){pending=nextPending;status={...nextStatus,desktopRestartGeneration:status.desktopRestartGeneration??0};}},close:async()=>{if(closed)return;closed=true;unsubscribe();listeners.clear();const old=leaseId;leaseId=undefined;if(old)await ctx.host.call('desktop.release',{leaseId:old});}} as unknown as DesktopControlChannel & {suspendDesktop():Promise<void>;resumeDesktop():Promise<void>;currentLease():string};
 }
 export async function activate(ctx:Context){
  let config=validate(await ctx.config.read(defaults()));
@@ -43,7 +47,7 @@ export async function activate(ctx:Context){
  let canRestartGpt=false;try{canRestartGpt=(await ctx.host.call('desktop.details')).restartGpt===true;}catch{}
  const restartOptions=canRestartGpt?{restartGpt:()=>ctx.host.call('desktop.restart'),onRestartError:(error:unknown)=>ctx.log(error instanceof Error?error.message:'重启GPT请求失败')}:{};
  let state='stopped',error='',clients=0,approvals=0,port=config.gatewayPort;
- let service:{close():Promise<void>;port:number}|undefined,managed:Awaited<ReturnType<typeof startManagedAppServer>>|undefined,channel:DesktopControlChannel|undefined;
+ let service:{close():Promise<void>;port:number}|undefined,managed:Awaited<ReturnType<typeof startManagedAppServer>>|undefined,channel:Awaited<ReturnType<typeof controlProxy>>|undefined;
  const logs:string[]=[];
  const log=(message:string)=>{logs.push(`${new Date().toISOString()} ${message}`);if(logs.length>200)logs.shift();ctx.log(message);};
  const getStatus=()=>({state,mode:config.mode,clients,approvals,error,port,canApplyConfig:true});
@@ -55,15 +59,16 @@ export async function activate(ctx:Context){
  const stopService=async()=>{state='stopping';publish();try{await close();state='stopped';error='';log('Mobile 已停止');}catch(e:any){state='error';error=e.message;throw e;}finally{publish();}};
  const stop=()=>serial(stopService);
  const startService=async()=>{
- if(service&&state!=='waiting')return getStatus();
- if(service)await close();if(ctx.signal.aborted)throw new Error('插件已卸载');state='starting';error='';publish();
+ if(service&&channel&&state==='waiting'){try{await channel.resumeDesktop();state='running';error='';publish();return getStatus();}catch(e:any){state='waiting';error=e.message;publish();throw e;}}
+ if(service)return getStatus();
+ if(ctx.signal.aborted)throw new Error('插件已卸载');state='starting';error='';publish();
  try{
   const nativeLocal=config.mode==='native';
   if(config.mode==='cdp'||nativeLocal){
    const {leaseId}=await ctx.host.call(nativeLocal?'desktop.native.acquire':'desktop.acquire');
-   try{channel=await controlProxy(ctx,leaseId);}catch(e){await ctx.host.call('desktop.release',{leaseId});throw e;}
-   const dots=new DotsAdapter({status:()=>ctx.host.call('desktop.dots.status',{leaseId}),request:async(request)=>{try{return await ctx.host.call('desktop.dots.request',{leaseId,request});}catch(e:any){throw new DotsError(e.code??'DOTS_UNAVAILABLE',e.message);}},close:async()=>{}});
-   service=await createControlGateway({...restartOptions,channel,dots,host:config.host,port:config.gatewayPort,token:config.token,staticDir:join(ctx.pluginDir,'web'),onStatus:s=>{clients=s.clients;approvals=s.approvals;error=s.error;if(!s.connected&&s.error)state='waiting';publish();}});
+   try{channel=await controlProxy(ctx,leaseId,nativeLocal?'desktop.native.acquire':'desktop.acquire');}catch(e){await ctx.host.call('desktop.release',{leaseId});throw e;}
+   const proxy=channel;const dots=new DotsAdapter({status:()=>ctx.host.call('desktop.dots.status',{leaseId:proxy.currentLease()}),request:async(request)=>{try{return await ctx.host.call('desktop.dots.request',{leaseId:proxy.currentLease(),request});}catch(e:any){throw new DotsError(e.code??'DOTS_UNAVAILABLE',e.message);}},close:async()=>{}});
+   service=await createControlGateway({...restartOptions,channel,dots,host:config.host,port:config.gatewayPort,token:config.token,staticDir:join(ctx.pluginDir,'web'),onStatus:s=>{clients=s.clients;approvals=s.approvals;error=s.error;if(!s.connected&&s.error)state='waiting';else if(s.connected&&state==='waiting')state='running';publish();}});
   }else{
    const upstream=config.mode==='managed'?`ws://127.0.0.1:${config.appServerPort}`:config.upstreamUrl;
    if(config.mode==='managed'){const details=await ctx.host.call('desktop.details');managed=await startManagedAppServer(config.appServerPort,details.cliPath);const child=managed;void child.exited.then(code=>{if(managed===child){void serial(async()=>{if(managed!==child)return;await close();state='error';error=`app-server 意外退出：${code}`;publish();});}});}
@@ -107,5 +112,6 @@ export async function activate(ctx:Context){
  register('copy-url',async()=>{await ctx.host.call('clipboard.writeText',{text:urls().accessUrl});return {copied:true};});
  register('approvals.list',()=>channel?.pendingApprovals()??[]);
  register('approvals.respond',async input=>{if(!channel)throw new Error('Desktop 控制通道未启动');await channel.respond(input.approvalId,input.result);return {submitted:true};});
- ctx.onDispose(stop);publish();return {start,stop,getStatus,deactivate:stop};
+ const suspendDesktop=()=>serial(async()=>{if(channel){await channel.suspendDesktop();state='waiting';publish();}});
+ ctx.onDispose(stop);publish();return {start,stop,suspendDesktop,getStatus,deactivate:stop};
 }

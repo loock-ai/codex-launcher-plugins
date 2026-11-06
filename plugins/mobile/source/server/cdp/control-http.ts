@@ -32,7 +32,7 @@ export function controlHttp(options:{restartGpt?:()=>Promise<unknown>;onRestartE
     if(url.pathname==='/api/uploads/file'){await uploadToDesktop(req,res,options.channel,hostId);return;}
     if(url.pathname==='/api/status')res.end(JSON.stringify({...options.channel.status(),capabilities:{...options.channel.status().capabilities,dots:!!options.dots}}));
     else if(url.pathname==='/api/desktop/hosts'){const name=await computerName;res.end(JSON.stringify({data:(await options.channel.hosts()).map(host=>host.hostId==='local'?{...host,displayName:options.identity?.displayName??name}:host)}));}
-    else if(url.pathname==='/api/host')res.end(JSON.stringify({hostId:options.identity?.hostId??hostname()+'-desktop-control'+(remote?':'+hostId:''),displayName:remote?.displayName??options.identity?.displayName??await computerName,hostname:hostname(),gatewayVersion:'0.2.0',appServerReady:options.channel.status().connected,backend:'desktop-control',...(options.restartGpt?{capabilities:{restartGpt:true}}:{})}));
+    else if(url.pathname==='/api/host')res.end(JSON.stringify({hostId:options.identity?.hostId??hostname()+'-desktop-control'+(remote?':'+hostId:''),displayName:remote?.displayName??options.identity?.displayName??await computerName,hostname:hostname(),gatewayVersion:'0.2.0',appServerReady:options.channel.status().connected,desktopRestartGeneration:options.channel.status().desktopRestartGeneration??0,backend:'desktop-control',...(options.restartGpt?{capabilities:{restartGpt:true}}:{})}));
     else if(url.pathname==='/api/projects'){
      const projects=new Set<string>(),seen=new Set<string>();let cursor:string|null=null;
      for(let count=0;;count++){

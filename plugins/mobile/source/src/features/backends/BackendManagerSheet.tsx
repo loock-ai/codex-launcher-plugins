@@ -1,4 +1,4 @@
-import {requestRestartGpt} from '../../backends/restart-gpt';
+import {restartGptAndWait} from '../../backends/restart-gpt';
 import {
   type FormEvent,
   useCallback,
@@ -96,7 +96,7 @@ export function BackendManagerSheet({
   const restartBusy=useRef(false);
   const restartBackend=async(backend:BackendConfig)=>{
     if(restartBusy.current)return;restartBusy.current=true;setRestartingId(backend.id);setError('');
-    try{await requestRestartGpt(backend);}catch(reason){setError(reason instanceof Error?reason.message:t('设备连接暂不可用'));}
+    try{await restartGptAndWait(backend);}catch(reason){setError(reason instanceof Error?reason.message:t('设备连接暂不可用'));}
     finally{restartBusy.current=false;setRestartingId('');}
   };
   const [testing, setTesting] = useState(false);
@@ -372,8 +372,9 @@ export function BackendManagerSheet({
                         className="backend-restart-gpt"
                         aria-label={t("重启GPT {name}",{name:backend.name})}
                         disabled={!!restartingId}
+                        aria-busy={restartingId===backend.id}
                         onClick={()=>void restartBackend(backend)}
-                      >{t(restartingId===backend.id?"请求中…":"重启GPT")}</button>
+                      >{restartingId===backend.id&&<span className="action-spinner" aria-hidden="true"/>}{t(restartingId===backend.id?"正在重启…":"重启GPT")}</button>
                       <button
                         type="button"
                         aria-label={t("编辑 {name}", { name: backend.name })}

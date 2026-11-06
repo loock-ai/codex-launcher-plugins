@@ -564,3 +564,7 @@ button, a, summary, [role="button"] { -webkit-tap-highlight-color: transparent; 
 
 .backend-row-actions .backend-restart-gpt{white-space:nowrap;min-width:64px}
 @media(max-width:480px){.backend-manager-row{grid-template-columns:minmax(0,1fr)}.backend-row-actions{justify-content:flex-end}}
+
+.backend-row-actions .backend-restart-gpt{display:inline-flex;align-items:center;justify-content:center;gap:5px}
+.backend-row-actions .backend-restart-gpt[aria-busy="true"]{opacity:.8}
+.backend-restart-gpt .action-spinner{width:12px;height:12px;border-width:1.5px}
