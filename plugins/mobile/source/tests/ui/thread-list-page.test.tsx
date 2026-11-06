@@ -50,7 +50,6 @@ function renderList(
     collapsedProjectKeys = new Set<string>(),
     loadingBackendIds = new Set<string>(),
     refreshing = false,
-    onRestartGpt,
     projectDirectories = ["/tmp/project-a", "/tmp/project-b"],
     projectThreadStates = {},
     query = "",
@@ -60,7 +59,6 @@ function renderList(
     collapsedProjectKeys?: Set<string>;
     loadingBackendIds?: Set<string>;
     refreshing?: boolean;
-    onRestartGpt?:()=>void;
     projectDirectories?: string[];
     projectThreadStates?: Record<string, "loading" | "ready" | "error">;
     query?: string;
@@ -90,8 +88,6 @@ function renderList(
       onOpenThread={() => undefined}
       onNewChat={() => undefined}
       onSelectBackend={() => undefined}
-      onRestartGpt={onRestartGpt}
-      canRestartGpt={true}
       onManageBackends={() => undefined}
       onRefresh={() => undefined}
       onRetryProject={onRetryProject}
@@ -310,12 +306,4 @@ describe("会话侧边栏列表", () => {
     expect(meta?.firstElementChild).toBe(unread);
     now.mockRestore();
   });
-});
-
-it('重启GPT按钮显示在管理设备前面并调用独立操作',()=>{
- const restart=vi.fn();const view=renderList('mini',{onRestartGpt:restart});
- const button=within(view.container).getByRole('button',{name:'重启GPT'});
- const manage=within(view.container).getByRole('button',{name:'管理设备'});
- expect(button.nextElementSibling).toBe(manage);
- fireEvent.click(button);expect(restart).toHaveBeenCalledOnce();
 });

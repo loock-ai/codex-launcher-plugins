@@ -14,6 +14,7 @@ const LANGUAGE_STORAGE_KEY = "codex-mobile:language";
 
 const english: Record<string, string> = {
   "重启GPT": "Restart GPT",
+  "重启GPT {name}": "Restart GPT on {name}",
   "请求中…": "Requesting…",
   "请先选择要重启的设备": "Select a device to restart",
   "设备连接暂不可用": "Device connection is unavailable",

@@ -1,4 +1,5 @@
 import {
+  cleanup,
   fireEvent,
   render,
   screen,
@@ -303,4 +304,17 @@ describe("多设备界面", () => {
     fireEvent.click(screen.getByRole("button", { name: "检查更新" }));
     expect(onCheckUpdate).toHaveBeenCalledTimes(1);
   });
+});
+
+it('每台设备的重启GPT位于编辑前面，并操作点击的设备',async()=>{
+ cleanup();
+ const api=await import('../../src/backends/restart-gpt');
+ const restart=vi.spyOn(api,'requestRestartGpt').mockResolvedValue();
+ try{
+  render(<BackendManagerSheet open registry={{version:1,selectedBackendId:mini.id,backends:[mini,macbook]}} summaries={summaries} onChange={()=>{}} onClose={()=>{}} discoverHosts={async()=>null}/>);
+  const miniRestart=screen.getByRole('button',{name:'重启GPT Mac mini'});
+  expect(miniRestart.nextElementSibling).toBe(screen.getByRole('button',{name:'编辑 Mac mini'}));
+  fireEvent.click(screen.getByRole('button',{name:'重启GPT MacBook'}));
+  await waitFor(()=>expect(restart).toHaveBeenCalledExactlyOnceWith(macbook));
+ }finally{restart.mockRestore();}
 });

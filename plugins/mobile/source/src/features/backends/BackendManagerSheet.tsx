@@ -1,3 +1,4 @@
+import {requestRestartGpt} from '../../backends/restart-gpt';
 import {
   type FormEvent,
   useCallback,
@@ -91,6 +92,13 @@ export function BackendManagerSheet({
   const [draft, setDraft] = useState<BackendDraft | null>(() =>
     open && !registry.backends.length ? newBackendDraft(0) : null,
   );
+  const [restartingId,setRestartingId]=useState('');
+  const restartBusy=useRef(false);
+  const restartBackend=async(backend:BackendConfig)=>{
+    if(restartBusy.current)return;restartBusy.current=true;setRestartingId(backend.id);setError('');
+    try{await requestRestartGpt(backend);}catch(reason){setError(reason instanceof Error?reason.message:t('设备连接暂不可用'));}
+    finally{restartBusy.current=false;setRestartingId('');}
+  };
   const [testing, setTesting] = useState(false);
   const [selection,setSelection]=useState<{candidate:BackendConfig;hosts:DesktopHost[];ids:string[]}|null>(null);
   const attempt=useRef(0);
@@ -306,6 +314,7 @@ export function BackendManagerSheet({
           </form>
         ) : (
           <>
+            {error&&<p className="backend-form-error" role="alert">{error}</p>}
             <div className="backend-manager-list">
               {registry.backends.map((backend, index) => {
                 const summary = summaries[backend.id];
@@ -358,6 +367,13 @@ export function BackendManagerSheet({
                       >
                         ↓
                       </button>
+                      <button
+                        type="button"
+                        className="backend-restart-gpt"
+                        aria-label={t("重启GPT {name}",{name:backend.name})}
+                        disabled={!!restartingId}
+                        onClick={()=>void restartBackend(backend)}
+                      >{t(restartingId===backend.id?"请求中…":"重启GPT")}</button>
                       <button
                         type="button"
                         aria-label={t("编辑 {name}", { name: backend.name })}

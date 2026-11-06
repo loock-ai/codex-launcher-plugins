@@ -1,11 +1,6 @@
 import type {BackendConfig} from './types';
 import {t} from '../i18n';
 
-export function selectRestartGateway(backends:BackendConfig[],selectedId:string):BackendConfig|null{
- const candidates=backends.filter(b=>b.enabled&&(selectedId==='all'||b.id===selectedId));
- const gateways=new Map(candidates.map(b=>[b.baseUrl.replace(/\/+$/,''),b]));
- return gateways.size===1?[...gateways.values()][0]:null;
-}
 export async function requestRestartGpt(backend:BackendConfig,fetcher:typeof fetch=fetch){
  const url=new URL('/api/host',backend.baseUrl);url.searchParams.set('token',backend.token);
  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),12000);

@@ -44,10 +44,6 @@ export function ThreadListPage({
   onOpenThread,
   onNewChat,
   onSelectBackend,
-  onRestartGpt,
-  restartingGpt=false,
-  canRestartGpt=false,
-  restartGptTargetLabel,
   onManageBackends,
   onRefresh,
   onRetryProject,
@@ -74,10 +70,6 @@ export function ThreadListPage({
   onOpenThread: (thread: AggregatedThreadItem) => void | Promise<void>;
   onNewChat: () => void;
   onSelectBackend: (backendId: string) => void;
-  onRestartGpt?: () => void;
-  restartingGpt?: boolean;
-  canRestartGpt?: boolean;
-  restartGptTargetLabel?: string;
   onManageBackends: () => void;
   onRefresh: () => void;
   onRetryProject: (backendId: string, cwd: string) => void;
@@ -176,13 +168,7 @@ export function ThreadListPage({
                 <AppIcon name="refresh" />
               )}
             </button>
-            {onRestartGpt&&<button
-              className="round-button restart-gpt-action"
-              aria-label={t("重启GPT")}
-              title={canRestartGpt?t("重启GPT")+(restartGptTargetLabel?" · "+restartGptTargetLabel:""):t("请先选择要重启的设备")}
-              disabled={!canRestartGpt||restartingGpt}
-              onClick={onRestartGpt}
-            ><AppIcon name="refresh"/><span>{t(restartingGpt?"请求中…":"重启GPT")}</span></button>}
+
             <button
               className="round-button"
               aria-label={t("管理设备")}
